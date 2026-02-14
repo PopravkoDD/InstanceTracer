@@ -36,3 +36,27 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+/client/.gradle/buildOutputCleanup/buildOutputCleanup.lock
+/client/.gradle/buildOutputCleanup/cache.properties
+/client/.gradle/8.4/checksums/checksums.lock
+/client/.gradle/8.4/dependencies-accessors/dependencies-accessors.lock
+/agent/dependency-reduced-pom.xml
+/.idea/encodings.xml
+/client/.gradle/8.4/executionHistory/executionHistory.bin
+/client/.gradle/8.4/executionHistory/executionHistory.lock
+/client/.gradle/file-system.probe
+/client/.gradle/8.4/fileHashes/fileHashes.bin
+/client/.gradle/8.4/fileHashes/fileHashes.lock
+/client/.gradle/8.4/dependencies-accessors/gc.properties
+/client/.gradle/8.4/gc.properties
+/client/.gradle/vcs-1/gc.properties
+/.idea/gradle.xml
+/client/.gradle/8.4/fileChanges/last-build.bin
+/client/.gradle/8.4/checksums/md5-checksums.bin
+/.idea/misc.xml
+/client/.gradle/buildOutputCleanup/outputFiles.bin
+/client/.gradle/8.4/fileHashes/resourceHashesCache.bin
+/client/.gradle/8.4/checksums/sha1-checksums.bin
+/.idea/uiDesigner.xml
+/.idea/vcs.xml
