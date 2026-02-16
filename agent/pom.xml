@@ -65,7 +65,7 @@
                 <configuration>
                     <archive>
                         <manifestEntries>
-                            <Premain-Class>dd.pp.interparaiment.FxListeningAgent</Premain-Class>
+                            <Premain-Class>dd.pp.interparaiment.agents.FxListeningAgent</Premain-Class>
                             <Can-Redefine-Classes>true</Can-Redefine-Classes>
                             <Can-Retransform-Classes>true</Can-Retransform-Classes>
                         </manifestEntries>

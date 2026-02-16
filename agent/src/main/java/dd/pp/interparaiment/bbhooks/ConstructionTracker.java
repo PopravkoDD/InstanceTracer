@@ -1,27 +1,25 @@
-package dd.pp.interparaiment.command.toolhandlers;
+package dd.pp.interparaiment.bbhooks;
 
 import java.lang.instrument.Instrumentation;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import javafx.scene.Node;
-
 import dd.pp.interparaiment.BootstrapHookBridge;
-import dd.pp.interparaiment.command.BaseHookHandler;
-import dd.pp.interparaiment.command.context.HandlingContext;
+import dd.pp.interparaiment.command.toolhandlers.FxUiClickConstructionChecker;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.matcher.ElementMatchers;
 
-public class ConstructionScanner extends BaseHookHandler {
-    public ConstructionScanner(final Instrumentation instrumentation, final String params) {
+public class ConstructionTracker {
+
+    public static void attachTracker(final Instrumentation instrumentation, final String params) {
         final String targetName = extractTarget(params);
         new AgentBuilder.Default()
                 .with(AgentBuilder.Listener.StreamWriting.toSystemError().withErrorsOnly())
                 .type(ElementMatchers.named(targetName))
                 .transform((builder, typeDesc, classLoader, module, pd) ->
                         builder.visit(
-                                Advice.to(ConstructionScanner.class)
+                                Advice.to(FxUiClickConstructionChecker.class)
                                         .on(ElementMatchers.isConstructor())
                         )
                 )
@@ -29,7 +27,6 @@ public class ConstructionScanner extends BaseHookHandler {
 
         System.out.println(targetName + " Transformed");
     }
-
     private static String extractTarget(String target) {
         String key = "ScanTarget=";
         int start = target.indexOf(key);
@@ -42,30 +39,16 @@ public class ConstructionScanner extends BaseHookHandler {
         return null;
     }
 
-    @Override
-    protected void handle(final HandlingContext context, final Node handlingObject) {
-        final Object o = BootstrapHookBridge.getInstance().getScannedInstances().get(System.identityHashCode(handlingObject));
-        if (o != null) {
-            System.out.println("Target Tracked: " + o);
-        }
-    }
-
     @Advice.OnMethodExit()
     public static void exit(@Advice.This Object self) {
         final BootstrapHookBridge bhb = BootstrapHookBridge.getInstance();
         final int constructionHash = System.identityHashCode(self);
 
-        if (!bhb.getScannedInstances().contains(constructionHash)) {
-            bhb.getScannedInstances().put(constructionHash,
-                    StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
-                            .walk(ConstructionScanner::walk)
-                            .map(ConstructionScanner::format).get()
-            );
-
-            System.out.println("Tracker Attached: " + self);
+        if (!bhb.getTrackedInstances().contains(constructionHash)) {
+            bhb.getTrackedInstances().put(constructionHash, createMessage(self));
+            bhb.notifyInstanceCreated(constructionHash);
         }
     }
-
     public static Optional<StackWalker.StackFrame> walk(Stream<StackWalker.StackFrame> s) {
         return s.skip(1).findFirst();
     }
@@ -73,5 +56,11 @@ public class ConstructionScanner extends BaseHookHandler {
     public static String format(StackWalker.StackFrame f) {
         return f.getClassName() + "." + f.getMethodName() +
                 "(" + f.getFileName() + ":" + f.getLineNumber() + ")";
+    }
+
+    public static String createMessage(final Object self) {
+        return self.getClass().getName() + ": " + StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
+                .walk(ConstructionTracker::walk)
+                .map(ConstructionTracker::format).get();
     }
 }

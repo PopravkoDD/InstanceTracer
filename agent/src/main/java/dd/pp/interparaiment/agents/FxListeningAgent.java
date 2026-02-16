@@ -1,4 +1,4 @@
-package dd.pp.interparaiment;
+package dd.pp.interparaiment.agents;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,10 +11,12 @@ import javafx.scene.Node;
 import javafx.scene.input.MouseEvent;
 import javafx.stage.Window;
 
+import dd.pp.interparaiment.BootstrapHookBridge;
+import dd.pp.interparaiment.bbhooks.ConstructionTracker;
 import dd.pp.interparaiment.bbhooks.FxMouseEventHook;
 import dd.pp.interparaiment.command.IAmInHookSittingHandler;
 import dd.pp.interparaiment.command.context.HandlingContext;
-import dd.pp.interparaiment.command.toolhandlers.ConstructionScanner;
+import dd.pp.interparaiment.command.toolhandlers.FxUiClickConstructionChecker;
 import dd.pp.interparaiment.command.toolhandlers.PathLogger;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.asm.Advice;
@@ -30,7 +32,7 @@ public class FxListeningAgent {
 
         initHookBridge(inst, extractBootHookStringParam(agentArgs));
 
-        initBBHook(inst);
+        initFxHook(inst);
 
         final IAmInHookSittingHandler hhc = initHandlingParams(inst, agentArgs);
 
@@ -45,13 +47,15 @@ public class FxListeningAgent {
         final IAmInHookSittingHandler hookHandlingChain = new PathLogger();
 
         if (agentArgs.contains("ScanTarget")) {
-            hookHandlingChain.addNext(new ConstructionScanner(instrumentation, agentArgs));
+            ConstructionTracker.attachTracker(instrumentation, agentArgs);
+
+            hookHandlingChain.addNext(new FxUiClickConstructionChecker());
         }
 
         return hookHandlingChain;
     }
 
-    private static void initBBHook(Instrumentation inst) {
+    private static void initFxHook(Instrumentation inst) {
         new AgentBuilder.Default()
                 .with(AgentBuilder.Listener.StreamWriting.toSystemError().withErrorsOnly())
                 .type(ElementMatchers.named("com.sun.javafx.event.EventUtil"))
@@ -99,8 +103,6 @@ public class FxListeningAgent {
             }
         }).start();
     }
-
-
 
     private static void appendSelfToBootstrap(final Instrumentation inst, final String pathToHookJar) throws URISyntaxException, java.io.IOException {
         File jar = new File(pathToHookJar);
