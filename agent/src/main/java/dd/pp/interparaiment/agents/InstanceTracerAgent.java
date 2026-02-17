@@ -14,7 +14,7 @@ import static dd.pp.interparaiment.ULTRAHELPER.flex;
 
 public class InstanceTracerAgent {
     public static void premain(String agentArgs, Instrumentation inst) {
-        System.err.println("FX spy attached, NICE");
+        System.err.println("Instance tracer attached, NICE");
 
         flex();
 
@@ -23,8 +23,7 @@ public class InstanceTracerAgent {
 
         attachTrackers(inst, splitArgs);
 
-
-
+        initAgentPeer();
     }
 
     private static void initHookBridge(Instrumentation inst, final String bridgeJarPath) {
@@ -59,9 +58,8 @@ public class InstanceTracerAgent {
     }
 
     private static void initAgentPeer() {
-        final AgentSendingPeer instance = AgentSendingPeer.getInstance();
         try {
-            instance.init();
+            final AgentSendingPeer instance = AgentSendingPeer.getInstance();
 
             BootstrapHookBridge.getInstance().setPeerNotificator(createdHash -> {
                 final Object createdInstance = BootstrapHookBridge.getInstance().getTrackedInstances().get(createdHash);

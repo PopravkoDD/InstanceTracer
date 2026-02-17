@@ -11,10 +11,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class AgentSendingPeer {
     private static final String host = "127.0.0.1";
     private static final int port = 35824;
-
     private static AgentSendingPeer instance;
 
-    public static AgentSendingPeer getInstance() {
+    private Socket socket;
+    private DataOutputStream out;
+    private final AtomicBoolean open = new AtomicBoolean(false);
+
+    private AgentSendingPeer() throws IOException {
+        Runtime.getRuntime().addShutdownHook(new Thread(this::close));
+        init();
+    }
+
+    public static AgentSendingPeer getInstance() throws IOException {
         if (instance == null) {
             instance = new AgentSendingPeer();
         }
@@ -22,15 +30,7 @@ public class AgentSendingPeer {
         return instance;
     }
 
-    private Socket socket;
-    private DataOutputStream out;
-    private final AtomicBoolean open = new AtomicBoolean(false);
-
-    private AgentSendingPeer() {
-        Runtime.getRuntime().addShutdownHook(new Thread(this::close));
-    }
-
-    public void init() throws IOException {
+    private void init() throws IOException {
         if (open.get()) {
             return;
         }
