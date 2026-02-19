@@ -13,10 +13,13 @@ group = 'dd.pp.interparaiment'
 version = '1.0'
 
 repositories {
+    mavenLocal()
     mavenCentral()
 }
 
 dependencies {
+    implementation "dd.pp.interparaiment:view-model:1.0"
+
     testImplementation platform('org.junit:junit-bom:5.9.1')
     testImplementation 'org.junit.jupiter:junit-jupiter'
 }
