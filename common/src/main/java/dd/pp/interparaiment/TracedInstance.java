@@ -1,4 +1,4 @@
-package dd.pp.interpaiment;
+package dd.pp.interparaiment;
 
 public class TracedInstance {
     private String className;

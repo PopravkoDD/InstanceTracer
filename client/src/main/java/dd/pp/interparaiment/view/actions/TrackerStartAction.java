@@ -6,12 +6,17 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 
+import dd.pp.interparaiment.event.EventManager;
+import dd.pp.interparaiment.event.requests.StartInspectionRequest;
+
 public class TrackerStartAction extends AnAction {
+    private final EventManager eventManager;
     private final TrackingProcessState state;
 
-    public TrackerStartAction(final TrackingProcessState state) {
+    public TrackerStartAction(final TrackingProcessState state, final EventManager eventManager) {
         super("Start Tracking", "Starts connection with tracking agent", AllIcons.Debugger.ThreadRunning);
         this.state = state;
+        this.eventManager = eventManager;
     }
 
     @Override
@@ -23,5 +28,6 @@ public class TrackerStartAction extends AnAction {
     @Override
     public void actionPerformed(final @NotNull AnActionEvent anActionEvent) {
         state.setRunning(true);
+        eventManager.notify(new StartInspectionRequest());
     }
 }

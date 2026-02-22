@@ -16,10 +16,12 @@ import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBPanel;
 import com.intellij.ui.components.JBScrollPane;
 
+import dd.pp.interparaiment.event.EventManager;
 import dd.pp.interparaiment.view.actions.ConfigureTrackerAction;
 import dd.pp.interparaiment.view.actions.TrackerStartAction;
 import dd.pp.interparaiment.view.actions.TrackerStopAction;
 import dd.pp.interparaiment.view.actions.TrackingProcessState;
+import dd.pp.interparaiment.view.service.TracingService;
 
 public class InstanceTrackerPanel extends JBPanel {
     public InstanceTrackerPanel(final Project project) {
@@ -40,7 +42,7 @@ public class InstanceTrackerPanel extends JBPanel {
         //Tree view
         final JPanel treePanel = new JPanel(new BorderLayout());
 
-        final JComponent miniToolbar = createMiniToolbar();
+        final JComponent miniToolbar = createMiniToolbar(project);
 
         treePanel.add(miniToolbar, BorderLayout.NORTH);
 
@@ -54,12 +56,16 @@ public class InstanceTrackerPanel extends JBPanel {
         return splitter;
     }
 
-    private static JComponent createMiniToolbar() {
+    private static JComponent createMiniToolbar(final Project project) {
+        final TracingService tracingService = project.getService(TracingService.class);
+
         final DefaultActionGroup group = new DefaultActionGroup();
         final TrackingProcessState state = new TrackingProcessState();
 
-        final TrackerStartAction startAction = new TrackerStartAction(state);
-        final TrackerStopAction trackerStopAction = new TrackerStopAction(state);
+        final EventManager eventManager = tracingService.getViewModel().getEventManager();
+
+        final TrackerStartAction startAction = new TrackerStartAction(state, eventManager);
+        final TrackerStopAction trackerStopAction = new TrackerStopAction(state, eventManager);
         final ConfigureTrackerAction configureTrackerAction = new ConfigureTrackerAction(state);
 
         group.add(startAction);

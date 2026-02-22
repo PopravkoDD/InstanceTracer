@@ -9,6 +9,7 @@ import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 
 import dd.pp.interparaiment.view.controls.InstanceTrackerPanel;
+import dd.pp.interparaiment.view.service.TracingService;
 
 public class InstanceTrackerToolWindow implements ToolWindowFactory {
     @Override

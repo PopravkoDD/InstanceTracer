@@ -1,4 +1,4 @@
-package dd.pp.interpaiment.immodel;
+package dd.pp.interparaiment.immodel;
 
 public class TracedInstance {
 

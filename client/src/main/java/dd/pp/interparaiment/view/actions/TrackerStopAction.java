@@ -6,13 +6,17 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 
-public class TrackerStopAction extends AnAction {
+import dd.pp.interparaiment.event.EventManager;
+import dd.pp.interparaiment.event.requests.StopInspectionRequest;
 
+public class TrackerStopAction extends AnAction {
+    private final EventManager eventManager;
     private final TrackingProcessState state;
 
-    public TrackerStopAction(final TrackingProcessState state) {
+    public TrackerStopAction(final TrackingProcessState state, final EventManager eventManager) {
         super("Stop Tracking", "Closes connection with tracking agent", AllIcons.Actions.Suspend);
         this.state = state;
+        this.eventManager = eventManager;
     }
 
     @Override
@@ -24,5 +28,6 @@ public class TrackerStopAction extends AnAction {
     @Override
     public void actionPerformed(final @NotNull AnActionEvent anActionEvent) {
         state.setRunning(false);
+        eventManager.notify(new StopInspectionRequest());
     }
 }
