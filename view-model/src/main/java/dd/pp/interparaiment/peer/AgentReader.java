@@ -2,7 +2,6 @@ package dd.pp.interparaiment.peer;
 
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
-import java.io.EOFException;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -26,41 +25,36 @@ public class AgentReader {
         this.eventManager = eventManager;
         this.serverSocket = new ServerSocket(port, 1, InetAddress.getByName(host));
         this.serverSocket.setSoTimeout(10000);
-        this.worker = new ReadingWorker(this::run);
+        this.worker = new ReadingWorker(this::run, eventManager);
     }
 
     public void open() throws IOException {
-        eventManager.notify(new ShowMessageInConsoleRequest("Opening connection..."));
-        socket = this.serverSocket.accept();
-        eventManager.notify(new ShowMessageInConsoleRequest("Connection opened, starting reading worker!"));
+        this.eventManager.notify(new ShowMessageInConsoleRequest("Opening connection..."));
+        this.socket = this.serverSocket.accept();
+        this.eventManager.notify(new ShowMessageInConsoleRequest("Connection opened, starting reading worker!"));
 
         this.socket.setTcpNoDelay(true);
         this.socket.setKeepAlive(true);
 
-        this.in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
+        this.in = new DataInputStream(new BufferedInputStream(this.socket.getInputStream()));
 
-        worker.start();
+        this.worker.start();
     }
 
-    public void run() {
-        try {
-            int length = in.readInt();
-            if (length <= 0 || length > 50_000_000) {
-                throw new IOException("Invalid frame length: " + length);
-            }
-
-            byte type = in.readByte();
-
-            int payloadLength = length - 1;
-            byte[] payload = new byte[payloadLength];
-            in.readFully(payload);
-
-            handleFrame(type, payload);
-        } catch (EOFException eof) {
-            eventManager.notify(new ShowMessageInConsoleRequest("Socket closed by peer"));
-        } catch (Exception e) {
-            e.printStackTrace();
+    public void run() throws IOException {
+        int length = in.readInt();
+        if (length <= 0 || length > 50_000_000) {
+            throw new IOException("Invalid frame length: " + length);
         }
+
+        byte type = in.readByte();
+        eventManager.notify(new ShowMessageInConsoleRequest("Got a message, truing to read"));
+
+        int payloadLength = length - 1;
+        byte[] payload = new byte[payloadLength];
+        in.readFully(payload);
+
+        handleFrame(type, payload);
     }
 
     private void handleFrame(byte type, byte[] payload) {
@@ -72,9 +66,9 @@ public class AgentReader {
     }
 
     private void handleBinary(byte[] payload) {
-        eventManager.notify(new ShowMessageInConsoleRequest("Binary payload size = " + payload.length));
+        this.eventManager.notify(new ShowMessageInConsoleRequest("Binary payload size = " + payload.length));
     }
     private void handleString(byte[] payload) {
-        eventManager.notify(new ShowMessageInConsoleRequest("Binary payload size = " + payload.length));
+        this.eventManager.notify(new ShowMessageInConsoleRequest("Binary payload size = " + payload.length));
     }
 }

@@ -1,13 +1,20 @@
 package dd.pp.interparaiment;
 
+import java.io.EOFException;
+import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import dd.pp.interparaiment.event.EventManager;
+import dd.pp.interparaiment.event.requests.ShowMessageInConsoleRequest;
 
 public class ReadingWorker {
     private final AtomicBoolean running = new AtomicBoolean(true);
     private final Thread thread;
+    private final EventManager eventManager;
     private IReadingWork work;
 
-    public ReadingWorker(final IReadingWork work) {
+    public ReadingWorker(final IReadingWork work, final EventManager eventManager) {
+        this.eventManager = eventManager;
         this.work = work;
         thread = new Thread(this::runLoop, "reading-worker");
     }
@@ -22,16 +29,16 @@ public class ReadingWorker {
                 work.run();
             }
         } catch (InterruptedException ie) {
+            eventManager.notify(new ShowMessageInConsoleRequest("Interrupting reading worker: " + ie.getMessage()));
+            Thread.currentThread().interrupt();
+        } catch (EOFException eofException) {
+            eventManager.notify(new ShowMessageInConsoleRequest("Socket closed by peer"));
             Thread.currentThread().interrupt();
         } catch (Throwable t) {
-            t.printStackTrace();
+            eventManager.notify(new ShowMessageInConsoleRequest("PEPE WATAFA: " + t.getMessage()));
         } finally {
             cleanup();
         }
-    }
-
-    private void doOneStepBlocking() throws InterruptedException {
-        Thread.sleep(50);
     }
 
     private void cleanup() {
@@ -44,6 +51,6 @@ public class ReadingWorker {
     }
 
     public interface IReadingWork {
-        void run() throws InterruptedException;
+        void run() throws IOException, InterruptedException;
     }
 }
