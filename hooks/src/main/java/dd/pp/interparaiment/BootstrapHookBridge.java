@@ -1,7 +1,5 @@
 package dd.pp.interparaiment;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
@@ -12,7 +10,7 @@ public class BootstrapHookBridge {
     private final ConcurrentLinkedQueue<Object> eventQueue = new ConcurrentLinkedQueue<>();
     private final ConcurrentHashMap<Object, Object> trackedInstances = new ConcurrentHashMap<>();
     private Consumer<Integer> instanceCreatedNotificator;
-    private ExecutorService notificationExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService notificationExecutor = Executors.newSingleThreadExecutor();
 
 
     private static BootstrapHookBridge instance;

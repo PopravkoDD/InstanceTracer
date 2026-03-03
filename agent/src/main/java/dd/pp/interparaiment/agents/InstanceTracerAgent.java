@@ -8,7 +8,7 @@ import java.util.jar.JarFile;
 
 import dd.pp.interparaiment.BootstrapHookBridge;
 import dd.pp.interparaiment.bbhooks.ConstructionTracker;
-import dd.pp.interparaiment.communication.AgentSendingPeer;
+import dd.pp.interparaiment.communication.AgentWriter;
 
 import static dd.pp.interparaiment.ULTRAHELPER.flex;
 
@@ -59,7 +59,7 @@ public class InstanceTracerAgent {
 
     private static void initAgentPeer() {
         try {
-            final AgentSendingPeer instance = AgentSendingPeer.getInstance();
+            final AgentWriter instance = AgentWriter.getInstance();
 
             BootstrapHookBridge.getInstance().setPeerNotificator(createdHash -> {
                 final Object createdInstance = BootstrapHookBridge.getInstance().getTrackedInstances().get(createdHash);

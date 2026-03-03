@@ -1,13 +1,7 @@
 package dd.pp.interparaiment.command;
 
-import java.awt.Component;
-
 import javafx.scene.Node;
-import javafx.scene.control.TextInputControl;
 
-/**
- * @author dvhaus gmbh in cooperation with intechcore gmbh
- */
 public class ByTextAnchorHandler implements INodeAnchorHandler {
     private final INodeAnchorHandler next;
     public ByTextAnchorHandler(final INodeAnchorHandler next) {

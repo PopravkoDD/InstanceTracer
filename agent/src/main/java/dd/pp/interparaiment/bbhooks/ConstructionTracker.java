@@ -10,6 +10,7 @@ import net.bytebuddy.asm.Advice;
 import net.bytebuddy.matcher.ElementMatchers;
 
 public class ConstructionTracker {
+    public static String SPLITTER = ",";
 
     public static void attachTracker(final Instrumentation instrumentation, final String targetName) {
         new AgentBuilder.Default()
@@ -31,24 +32,36 @@ public class ConstructionTracker {
         final BootstrapHookBridge bhb = BootstrapHookBridge.getInstance();
         final int constructionHash = System.identityHashCode(self);
 
-        if (!bhb.getTrackedInstances().contains(constructionHash)) {
-            bhb.getTrackedInstances().put(constructionHash, createMessage(self));
-            bhb.notifyInstanceCreated(constructionHash);
-            System.out.println("Instance tracked");
-        }
-    }
-    public static Optional<StackWalker.StackFrame> walk(Stream<StackWalker.StackFrame> s) {
-        return s.skip(1).findFirst();
-    }
-
-    public static String format(StackWalker.StackFrame f) {
-        return f.getClassName() + "." + f.getMethodName() +
-                "(" + f.getFileName() + ":" + f.getLineNumber() + ")";
-    }
-
-    public static String createMessage(final Object self) {
-        return self.getClass().getName() + ": " + StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
+        final StackWalker.StackFrame callerFrame = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
                 .walk(ConstructionTracker::walk)
-                .map(ConstructionTracker::format).get();
+                .get();
+
+        final String callerClass = callerFrame.getClassName();
+        final String callerMethod = callerFrame.getMethodName();
+        final int lineNumber = callerFrame.getLineNumber();
+
+        final String message = new StringBuilder()
+                .append(constructionHash)
+                .append(ConstructionTracker.SPLITTER)
+                .append(self.getClass().getName())
+                .append(ConstructionTracker.SPLITTER)
+                .append(callerClass)
+                .append(ConstructionTracker.SPLITTER)
+                .append(callerMethod)
+                .append(ConstructionTracker.SPLITTER)
+                .append(lineNumber)
+                .toString();
+
+        bhb.getTrackedInstances().put(constructionHash, message);
+        bhb.notifyInstanceCreated(constructionHash);
+        System.out.println("Instance tracked");
+    }
+    public static Optional<StackWalker.StackFrame> walk(Stream<StackWalker.StackFrame> stackStream) {
+        return stackStream.skip(1).findFirst();
+    }
+
+    public static String format(StackWalker.StackFrame frame) {
+        return frame.getClassName() + "." + frame.getMethodName() +
+                "(" + frame.getFileName() + ":" + frame.getLineNumber() + ")";
     }
 }

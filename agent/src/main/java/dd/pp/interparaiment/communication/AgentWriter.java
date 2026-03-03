@@ -8,51 +8,51 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class AgentSendingPeer {
+public class AgentWriter {
     private static final String host = "127.0.0.1";
     private static final int port = 35824;
-    private static AgentSendingPeer instance;
+    private static AgentWriter instance;
 
     private Socket socket;
     private DataOutputStream out;
     private final AtomicBoolean open = new AtomicBoolean(false);
 
-    private AgentSendingPeer() throws IOException {
+    private AgentWriter() throws IOException {
         Runtime.getRuntime().addShutdownHook(new Thread(this::close));
         init();
     }
 
-    public static AgentSendingPeer getInstance() throws IOException {
+    public static AgentWriter getInstance() throws IOException {
         if (instance == null) {
-            instance = new AgentSendingPeer();
+            instance = new AgentWriter();
         }
 
         return instance;
     }
 
     private void init() throws IOException {
-        if (open.get()) {
+        if (this.open.get()) {
             return;
         }
 
-        socket = new Socket();
-        socket.connect(new InetSocketAddress(host, port), 3000);
+        this.socket = new Socket();
+        this.socket.connect(new InetSocketAddress(host, port), 3000);
 
-        socket.setTcpNoDelay(true);
-        socket.setKeepAlive(true);
+        this.socket.setTcpNoDelay(true);
+        this.socket.setKeepAlive(true);
 
-        out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
-        open.set(true);
+        this.out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
+        this.open.set(true);
     }
 
     public void sendMessage(byte type, byte[] payload) throws IOException {
         ensureOpen();
 
-        out.writeInt(1 + payload.length);
-        out.writeByte(type);
-        out.write(payload);
+        this.out.writeInt(1 + payload.length);
+        this.out.writeByte(type);
+        this.out.write(payload);
 
-        out.flush();
+        this.out.flush();
     }
 
     public void sendText(byte type, String text) throws IOException {
@@ -60,34 +60,34 @@ public class AgentSendingPeer {
     }
 
     private void ensureOpen() throws IOException {
-        if (!open.get() || socket == null || socket.isClosed()) {
+        if (!open.get() || this.socket == null || this.socket.isClosed()) {
             throw new IOException("Channel is not initialized or already closed");
         }
     }
 
     public void close() {
-        open.set(false);
+        this.open.set(false);
         try {
-            if (out != null) {
-                out.flush();
+            if (this.out != null) {
+                this.out.flush();
             }
         } catch (IOException ignored) {
         }
 
         try {
-            if (out != null) {
-                out.close();
+            if (this.out != null) {
+                this.out.close();
             }
         } catch (IOException ignored) {
         }
 
         try {
-            if (socket != null) {
-                socket.close();
+            if (this.socket != null) {
+                this.socket.close();
             }
         } catch (IOException ignored) {
         }
-        out = null;
-        socket = null;
+        this.out = null;
+        this.socket = null;
     }
 }

@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 
 import dd.pp.interparaiment.ReadingWorker;
 import dd.pp.interparaiment.event.EventManager;
@@ -69,6 +70,6 @@ public class AgentReader {
         this.eventManager.notify(new ShowMessageInConsoleRequest("Binary payload size = " + payload.length));
     }
     private void handleString(byte[] payload) {
-        this.eventManager.notify(new ShowMessageInConsoleRequest("Binary payload size = " + payload.length));
+        this.eventManager.notify(new ShowMessageInConsoleRequest("The message: " + new String(payload, StandardCharsets.UTF_8)));
     }
 }
