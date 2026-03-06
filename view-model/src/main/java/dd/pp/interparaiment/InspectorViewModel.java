@@ -6,15 +6,25 @@ import dd.pp.interparaiment.event.EventManager;
 import dd.pp.interparaiment.event.requests.ShowMessageInConsoleRequest;
 import dd.pp.interparaiment.event.requests.StartInspectionRequest;
 import dd.pp.interparaiment.event.requests.StopInspectionRequest;
-import dd.pp.interparaiment.peer.AgentReader;
+import dd.pp.interparaiment.immodel.MessModel;
+import dd.pp.interparaiment.p2p.AgentReader;
+import dd.pp.interparaiment.p2p.DataResolvingWorker;
 
 public class InspectorViewModel {
     private final EventManager eventManager = new EventManager();
     private final AgentReader reader;
+    private final DataResolvingWorker dataResolver;
+
+    private final MessModel messModel;
+
 
     public InspectorViewModel() {
+        this.dataResolver = new DataResolvingWorker(this);
+
+        messModel = new MessModel();
+
         try {
-            this.reader = new AgentReader(this.eventManager);
+            this.reader = new AgentReader(this.eventManager, this.dataResolver);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -38,5 +48,9 @@ public class InspectorViewModel {
 
     public EventManager getEventManager() {
         return this.eventManager;
+    }
+
+    public MessModel getMessModel() {
+        return messModel;
     }
 }

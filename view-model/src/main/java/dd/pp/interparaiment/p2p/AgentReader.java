@@ -1,4 +1,4 @@
-package dd.pp.interparaiment.peer;
+package dd.pp.interparaiment.p2p;
 
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
 
 import dd.pp.interparaiment.ReadingWorker;
 import dd.pp.interparaiment.event.EventManager;
@@ -19,11 +18,13 @@ public class AgentReader {
     private final EventManager eventManager;
     private final ReadingWorker worker;
     private final ServerSocket serverSocket;
+    private final DataResolvingWorker dataResolver;
     private Socket socket;
     private DataInputStream in;
 
-    public AgentReader(final EventManager eventManager) throws IOException {
+    public AgentReader(final EventManager eventManager, final DataResolvingWorker dataResolver) throws IOException {
         this.eventManager = eventManager;
+        this.dataResolver = dataResolver;
         this.serverSocket = new ServerSocket(port, 1, InetAddress.getByName(host));
         this.serverSocket.setSoTimeout(10000);
         this.worker = new ReadingWorker(this::run, eventManager);
@@ -48,28 +49,9 @@ public class AgentReader {
             throw new IOException("Invalid frame length: " + length);
         }
 
-        byte type = in.readByte();
-        eventManager.notify(new ShowMessageInConsoleRequest("Got a message, truing to read"));
-
-        int payloadLength = length - 1;
-        byte[] payload = new byte[payloadLength];
+        byte[] payload = new byte[length];
         in.readFully(payload);
 
-        handleFrame(type, payload);
-    }
-
-    private void handleFrame(byte type, byte[] payload) {
-        switch (type) {
-            case 1 -> handleString(payload);
-            case 2 -> handleBinary(payload);
-            default -> throw new IllegalArgumentException("Unknown type: " + type);
-        }
-    }
-
-    private void handleBinary(byte[] payload) {
-        this.eventManager.notify(new ShowMessageInConsoleRequest("Binary payload size = " + payload.length));
-    }
-    private void handleString(byte[] payload) {
-        this.eventManager.notify(new ShowMessageInConsoleRequest("The message: " + new String(payload, StandardCharsets.UTF_8)));
+        dataResolver.emmit(payload);
     }
 }

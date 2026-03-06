@@ -7,4 +7,8 @@ public class TracedInstance {
     public TracedInstance(final int instanceHash) {
         this.instanceHash = instanceHash;
     }
+
+    public int getInstanceHash() {
+        return instanceHash;
+    }
 }

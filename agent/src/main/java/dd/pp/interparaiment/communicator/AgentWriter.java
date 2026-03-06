@@ -1,4 +1,4 @@
-package dd.pp.interparaiment.communication;
+package dd.pp.interparaiment.communicator;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;

@@ -8,7 +8,7 @@ import java.util.jar.JarFile;
 
 import dd.pp.interparaiment.BootstrapHookBridge;
 import dd.pp.interparaiment.bbhooks.ConstructionTracker;
-import dd.pp.interparaiment.communication.AgentWriter;
+import dd.pp.interparaiment.communicator.AgentWriter;
 
 import static dd.pp.interparaiment.ULTRAHELPER.flex;
 

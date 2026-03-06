@@ -1,4 +1,4 @@
-package dd.pp.interparaiment.immodel;
+package dd.pp.interparaiment.immodel.context;
 
 public class Path {
     public final String target;

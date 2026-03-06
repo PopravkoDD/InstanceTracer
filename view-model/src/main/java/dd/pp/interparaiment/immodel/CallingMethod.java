@@ -3,12 +3,21 @@ package dd.pp.interparaiment.immodel;
 import java.util.HashMap;
 import java.util.Map;
 
+import dd.pp.interparaiment.immodel.context.Path;
+import dd.pp.interparaiment.immodel.context.RawPath;
+
 public class CallingMethod {
-    private final String name;
+    private String name;
+    private byte[] rawName;
     private final Map<Integer, CallingLine> callingLines = new HashMap<>();
 
     public CallingMethod(final Path path) {
         this.name = path.method;
+        this.callingLines.put(path.line, new CallingLine(path));
+    }
+
+    public CallingMethod(final RawPath path) {
+        this.rawName = path.method;
         this.callingLines.put(path.line, new CallingLine(path));
     }
 
@@ -17,6 +26,16 @@ public class CallingMethod {
 
         if (callingLine != null) {
             callingLine.put(path);
+        } else {
+            callingLines.put(path.line, new CallingLine(path));
+        }
+    }
+
+    public void putRaw(final RawPath path) {
+        final CallingLine callingLine = callingLines.get(path.line);
+
+        if (callingLine != null) {
+            callingLine.putRaw(path);
         } else {
             callingLines.put(path.line, new CallingLine(path));
         }
