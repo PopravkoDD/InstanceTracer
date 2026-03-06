@@ -1,6 +1,7 @@
 package dd.pp.interparaiment.p2p;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 
 import dd.pp.interparaiment.InspectorViewModel;
@@ -35,16 +36,18 @@ public class DataResolvingWorker extends Thread {
     private void handleRaw(final byte[] payload) {
         final byte type = payload[0];
 
+        final byte[] purePayload = Arrays.copyOfRange(payload, 1, payload.length);
+
         switch (type) {
-            case 1 -> handleString(payload);
-            case 2 -> handleSingleRawMessage(payload);
-            case 3 -> handleRawBulk(payload);
+            case 1 -> handleString(purePayload);
+            case 2 -> handleSingleRawMessage(purePayload);
+            case 3 -> handleRawBulk(purePayload);
             default -> throw new IllegalArgumentException("Unknown type: " + type);
         }
     }
     private void handleString(byte[] payload) {
         final String message = new String(payload, StandardCharsets.UTF_8);
-        this.viewModel.getEventManager().notify(new ShowMessageInConsoleRequest("The message: " + message));
+        this.viewModel.getEventManager().notify(new ShowMessageInConsoleRequest("Got a message: " + message));
         this.stringResolver.resolve(message);
     }
     private void handleSingleRawMessage(byte[] payload) {

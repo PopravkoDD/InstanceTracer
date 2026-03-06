@@ -41,6 +41,7 @@ public class AgentReader {
         this.in = new DataInputStream(new BufferedInputStream(this.socket.getInputStream()));
 
         this.worker.start();
+        this.dataResolver.start();
     }
 
     public void run() throws IOException {

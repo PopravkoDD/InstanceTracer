@@ -19,9 +19,9 @@ public class InspectorViewModel {
 
 
     public InspectorViewModel() {
-        this.dataResolver = new DataResolvingWorker(this);
+        this.messModel = new MessModel();
 
-        messModel = new MessModel();
+        this.dataResolver = new DataResolvingWorker(this);
 
         try {
             this.reader = new AgentReader(this.eventManager, this.dataResolver);

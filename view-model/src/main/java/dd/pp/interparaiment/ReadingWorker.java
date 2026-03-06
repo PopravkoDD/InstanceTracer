@@ -7,23 +7,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import dd.pp.interparaiment.event.EventManager;
 import dd.pp.interparaiment.event.requests.ShowMessageInConsoleRequest;
 
-public class ReadingWorker {
+public class ReadingWorker extends Thread {
     private final AtomicBoolean running = new AtomicBoolean(true);
-    private final Thread thread;
     private final EventManager eventManager;
     private IReadingWork work;
 
     public ReadingWorker(final IReadingWork work, final EventManager eventManager) {
         this.eventManager = eventManager;
         this.work = work;
-        thread = new Thread(this::runLoop, "reading-worker");
     }
 
-    public void start() {
-        thread.start();
-    }
 
-    private void runLoop() {
+    @Override
+    public void run() {
         try {
             while (running.get() && !Thread.currentThread().isInterrupted()) {
                 work.run();
@@ -47,7 +43,7 @@ public class ReadingWorker {
 
     public void close() {
         running.set(false);
-        thread.interrupt();
+        interrupt();
     }
 
     public interface IReadingWork {

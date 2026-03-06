@@ -10,7 +10,7 @@ public class StringMessageResolver {
 
     private static final Pattern pattern = Pattern.compile(",");
 
-    public StringMessageResolver(MessModel model) {
+    public StringMessageResolver(final MessModel model) {
         this.model = model;
     }
 
