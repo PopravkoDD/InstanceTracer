@@ -16,22 +16,26 @@ import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBPanel;
 import com.intellij.ui.components.JBScrollPane;
 
+import dd.pp.interparaiment.InspectorViewModel;
 import dd.pp.interparaiment.event.EventManager;
 import dd.pp.interparaiment.event.requests.ShowMessageInConsoleRequest;
 import dd.pp.interparaiment.view.actions.ConfigureTrackerAction;
 import dd.pp.interparaiment.view.actions.TrackerStartAction;
 import dd.pp.interparaiment.view.actions.TrackerStopAction;
 import dd.pp.interparaiment.view.actions.TrackingProcessState;
+import dd.pp.interparaiment.view.model.construction.ConstructionTreeModel;
 import dd.pp.interparaiment.view.service.TracingService;
 
 public class InstanceTrackerPanel extends JBPanel {
 
     private final EventManager eventManager;
+    private final InspectorViewModel viewModel;
 
     public InstanceTrackerPanel(final Project project) {
         super(new BorderLayout());
 
-        eventManager = project.getService(TracingService.class).getViewModel().getEventManager();
+        this.viewModel = project.getService(TracingService.class).getViewModel();
+        this.eventManager = this.viewModel.getEventManager();
 
         JBLabel title = new JBLabel("Instance tracker");
         title.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
@@ -54,7 +58,11 @@ public class InstanceTrackerPanel extends JBPanel {
 
         treePanel.add(miniToolbar, BorderLayout.NORTH);
 
-        JTree tree = new JTree();
+
+        final ConstructionTreeModel treeModel = new ConstructionTreeModel(this.viewModel.getMessModel());
+
+        JTree tree = new JTree(treeModel);
+
         treePanel.add(new JBScrollPane(tree), BorderLayout.CENTER);
 
         final JBSplitter splitter = new JBSplitter(false, 0.25f);

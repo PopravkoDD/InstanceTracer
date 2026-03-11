@@ -1,6 +1,8 @@
 package dd.pp.interparaiment.immodel;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -8,10 +10,12 @@ import dd.pp.interparaiment.decoder.StringDecoder;
 import dd.pp.interparaiment.immodel.context.Path;
 import dd.pp.interparaiment.immodel.context.RawPath;
 
-public class CallingClass {
+public class CallingClass implements IMessNode {
     private String name;
     private byte[] rawName;
+
     private final Map<Integer, CallingMethod> callingMethods = new HashMap<>();
+    private ArrayList<IMessNode> indexedChildren;
 
     public CallingClass(final Path path) {
         this.name = path.caller;
@@ -25,24 +29,24 @@ public class CallingClass {
 
     public void put(final Path path) {
         final Integer key = path.method.hashCode();
-        final CallingMethod callingMethod = callingMethods.get(key);
+        final CallingMethod callingMethod = this.callingMethods.get(key);
 
         if (callingMethod != null) {
             callingMethod.put(path);
         } else {
-            callingMethods.put(key, new CallingMethod(path));
+            this.callingMethods.put(key, new CallingMethod(path));
         }
     }
 
     public void putRaw(final RawPath path) {
         final Integer key = Arrays.hashCode(path.method);
 
-        final CallingMethod callingMethod = callingMethods.get(key);
+        final CallingMethod callingMethod = this.callingMethods.get(key);
 
         if (callingMethod != null) {
             callingMethod.putRaw(path);
         } else {
-            callingMethods.put(key, new CallingMethod(path));
+            this.callingMethods.put(key, new CallingMethod(path));
         }
     }
 
@@ -52,5 +56,20 @@ public class CallingClass {
         }
 
         return name;
+    }
+
+    @Override
+    public ArrayList<IMessNode> getChildrenIndexed() {
+        if (this.indexedChildren == null ||
+                this.indexedChildren.size() != this.callingMethods.size()) {
+            this.indexedChildren = new ArrayList<>(this.callingMethods.values());
+        }
+
+        return this.indexedChildren;
+    }
+
+    @Override
+    public Collection<CallingMethod> getChildrenPure() {
+        return this.callingMethods.values();
     }
 }

@@ -13,11 +13,8 @@ public class DataResolvingWorker extends Thread {
     private int dropped = 0;
     private final ArrayBlockingQueue<byte[]> messageQueue = new ArrayBlockingQueue<>(100000);
 
-    private final StringMessageResolver stringResolver;
-
     public DataResolvingWorker(final InspectorViewModel viewModel) {
         this.viewModel = viewModel;
-        this.stringResolver = new StringMessageResolver(viewModel.getMessModel());
     }
 
     @Override
@@ -48,7 +45,8 @@ public class DataResolvingWorker extends Thread {
     private void handleString(byte[] payload) {
         final String message = new String(payload, StandardCharsets.UTF_8);
         this.viewModel.getEventManager().notify(new ShowMessageInConsoleRequest("Got a message: " + message));
-        this.stringResolver.resolve(message);
+
+        this.viewModel.getMessModel().put(StringMessageResolver.resolve(message));
     }
     private void handleSingleRawMessage(byte[] payload) {
     }

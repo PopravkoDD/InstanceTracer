@@ -1,15 +1,15 @@
 package dd.pp.interparaiment.immodel;
 
-import java.util.LinkedList;
-import java.util.List;
+import java.util.ArrayList;
+import java.util.Collection;
 
 import dd.pp.interparaiment.immodel.context.Path;
 import dd.pp.interparaiment.immodel.context.RawPath;
 
-public class CallingLine {
+public class CallingLine implements IMessNode {
     private final int line;
 
-    private final List<TracedInstance> instances = new LinkedList<>();
+    private final ArrayList<TracedInstance> instances = new ArrayList<>();
 
     public CallingLine(final Path path) {
         this.line = path.line;
@@ -34,7 +34,13 @@ public class CallingLine {
         return line;
     }
 
-    public List<TracedInstance> getInstances() {
-        return instances;
+    @Override
+    public ArrayList<TracedInstance> getChildrenIndexed() {
+        return this.instances;
+    }
+
+    @Override
+    public Collection<TracedInstance> getChildrenPure() {
+        return this.instances;
     }
 }

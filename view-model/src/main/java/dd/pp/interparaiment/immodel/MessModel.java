@@ -1,14 +1,17 @@
 package dd.pp.interparaiment.immodel;
 
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import dd.pp.interparaiment.immodel.context.Path;
 import dd.pp.interparaiment.immodel.context.RawPath;
 
-public class MessModel {
-    private final Map<Integer, TracedTarget> targets = new HashMap<>();
+public class MessModel implements IMessNode {
+    private final Map<Integer, TracedTarget> targets = new LinkedHashMap<>();
+    private ArrayList<IMessNode> indexedChildren;
 
     public void put(final Path path) {
         final TracedTarget tracedTarget = targets.get(path.target.hashCode());
@@ -17,6 +20,8 @@ public class MessModel {
             tracedTarget.put(path);
         } else {
             targets.put(path.target.hashCode(), new TracedTarget(path));
+
+            // creationTreeBus.createNode(path)
         }
     }
 
@@ -30,5 +35,20 @@ public class MessModel {
         } else {
             targets.put(targetNameHash, new TracedTarget(path));
         }
+    }
+
+    @Override
+    public ArrayList<IMessNode> getChildrenIndexed() {
+        if (this.indexedChildren == null ||
+                this.indexedChildren.size() != this.targets.size()) {
+            this.indexedChildren = new ArrayList<>(this.targets.values());
+        }
+
+        return this.indexedChildren;
+    }
+
+    @Override
+    public Collection<TracedTarget> getChildrenPure() {
+        return this.targets.values();
     }
 }

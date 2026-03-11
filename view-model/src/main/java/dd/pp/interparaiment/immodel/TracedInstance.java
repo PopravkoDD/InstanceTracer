@@ -1,6 +1,9 @@
 package dd.pp.interparaiment.immodel;
 
-public class TracedInstance {
+import java.util.ArrayList;
+import java.util.Collection;
+
+public class TracedInstance implements IMessNode {
 
     private final int instanceHash;
 
@@ -10,5 +13,15 @@ public class TracedInstance {
 
     public int getInstanceHash() {
         return instanceHash;
+    }
+
+    @Override
+    public ArrayList<IMessNode> getChildrenIndexed() {
+        return null;
+    }
+
+    @Override
+    public Collection<? extends IMessNode> getChildrenPure() {
+        return null;
     }
 }
