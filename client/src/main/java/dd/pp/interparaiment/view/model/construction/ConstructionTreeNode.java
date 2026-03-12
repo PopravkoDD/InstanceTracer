@@ -1,59 +1,43 @@
 package dd.pp.interparaiment.view.model.construction;
 
-import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.NoSuchElementException;
 
-
+import dd.pp.interparaiment.immodel.CallingLine;
 import dd.pp.interparaiment.immodel.IMessNode;
 import javax.swing.tree.TreeNode;
 
 public class ConstructionTreeNode implements TreeNode {
     private final IMessNode vmNode;
+    private final boolean isLeaf;
     private ConstructionTreeNode parent;
-    private Collection<? extends IMessNode> childrenCollection;
-    private IMessNode[] childrenArray;
-
-
+    private final List<ConstructionTreeNode> children = new ArrayList<>(100);
 
     public ConstructionTreeNode(final ConstructionTreeNode parent, final IMessNode node) {
         this.parent = parent;
-
         this.vmNode = node;
 
-        this.childrenCollection = node.getChildren();
+        this.isLeaf = !(node instanceof CallingLine);
 
-        updateChildren();
+        syncModels();
     }
 
-    private void updateChildren() {
-        this.childrenArray = this.vmNode.getChildren();
+    public void syncModels() {
+        this.children.addAll(this.vmNode.getFreshMeat().stream().map(iMessNode -> new ConstructionTreeNode(this, iMessNode)).toList());
     }
 
     @Override
     public TreeNode getChildAt(int childIndex) {
-        if (this.childrenCollection == null) {
-            return null;
-        }
-
-        if (childrenArray.length != childrenCollection.size()) {
-            updateChildren();
-        }
-
-        return childrenArray[childIndex];
+        return this.children.get(childIndex);
     }
 
     @Override
     public int getChildCount() {
-        if (this.childrenCollection == null) {
-            return 0;
-        }
 
-        if (childrenArray.length != childrenCollection.size()) {
-            updateChildren();
-        }
 
-        return childrenArray.length;
+        return this.children.size();
     }
 
     @Override
@@ -63,26 +47,23 @@ public class ConstructionTreeNode implements TreeNode {
 
     @Override
     public int getIndex(TreeNode node) {
-
-        for (IMessNode iMessNode : childrenCollection) {
-
-        }
-        for (int i = 0; i < childrenCollection.size(); i++) {
-            if (childrenArray[i] == node) {
+        for (int i = 0; i < this.children.size(); i++) {
+            if (this.children.get(i) == node) {
                 return i;
             }
         }
+
         return -1;
     }
 
     @Override
     public boolean getAllowsChildren() {
-        return true;
+        return !this.isLeaf;
     }
 
     @Override
     public boolean isLeaf() {
-        return childrenCollection == null;
+        return this.isLeaf;
     }
 
     @Override
@@ -92,7 +73,7 @@ public class ConstructionTreeNode implements TreeNode {
 
             @Override
             public boolean hasMoreElements() {
-                return this.index < ConstructionTreeNode.this.childrenArray.length;
+                return this.index < ConstructionTreeNode.this.children.size();
             }
 
             @Override
@@ -100,8 +81,12 @@ public class ConstructionTreeNode implements TreeNode {
                 if (!hasMoreElements()) {
                     throw new NoSuchElementException();
                 }
-                return ConstructionTreeNode.this.childrenArray[this.index++];
+                return ConstructionTreeNode.this.children.get(this.index++);
             }
         };
+    }
+
+    public List<ConstructionTreeNode> getChildren() {
+        return this.children;
     }
 }

@@ -1,5 +1,9 @@
     package dd.pp.interparaiment.view.model.construction;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.List;
+
 import javax.swing.event.TreeModelListener;
 import javax.swing.tree.TreeModel;
 import javax.swing.tree.TreePath;
@@ -17,6 +21,28 @@ public class ConstructionTreeModel implements TreeModel {
         this.root = new ConstructionTreeNode(null, messModel);
     }
 
+    public void syncModels() {
+
+    }
+
+    public  void dfsPreOrder() {
+        Deque<ConstructionTreeNode> stack = new ArrayDeque<>();
+        stack.push(this.root);
+
+        while (!stack.isEmpty()) {
+            ConstructionTreeNode current = stack.pop();
+
+            current.syncModels();
+
+            List<ConstructionTreeNode> children = current.getChildren();
+            for (int i = children.size() - 1; i >= 0; i--) {
+                ConstructionTreeNode child = children.get(i);
+                if (child != null) {
+                    stack.push(child);
+                }
+            }
+        }
+    }
 
     @Override
     public Object getRoot() {
@@ -25,17 +51,17 @@ public class ConstructionTreeModel implements TreeModel {
 
     @Override
     public Object getChild(Object parent, int index) {
-        return null;
+        return ((ConstructionTreeNode) parent).getChildAt(index);
     }
 
     @Override
     public int getChildCount(Object parent) {
-        return 0;
+        return ((ConstructionTreeNode) parent).getChildCount();
     }
 
     @Override
     public boolean isLeaf(Object node) {
-        return false;
+        return ((ConstructionTreeNode) node).isLeaf();
     }
 
     @Override
@@ -45,7 +71,7 @@ public class ConstructionTreeModel implements TreeModel {
 
     @Override
     public int getIndexOfChild(Object parent, Object child) {
-        return 0;
+        return ((ConstructionTreeNode) parent).getIndex(((ConstructionTreeNode) child));
     }
 
     @Override
