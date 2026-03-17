@@ -7,10 +7,10 @@ import java.util.Map;
 import dd.pp.interparaiment.immodel.context.Path;
 
 public class CallingClass implements IMessNode {
-    private String name;
+    private final String name;
 
     private final Map<Integer, CallingMethod> callingMethods = new HashMap<>();
-    private ArrayList<IMessNode> freshMeat;
+    private final ArrayList<IMessNode> freshMeat = new ArrayList<>();
 
     public CallingClass(final Path path) {
         this.name = path.caller;

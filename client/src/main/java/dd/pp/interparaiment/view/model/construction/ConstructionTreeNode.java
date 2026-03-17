@@ -25,7 +25,11 @@ public class ConstructionTreeNode implements TreeNode {
     }
 
     public void syncModels() {
-        this.children.addAll(this.vmNode.getFreshMeat().stream().map(iMessNode -> new ConstructionTreeNode(this, iMessNode)).toList());
+        final ArrayList<IMessNode> freshMeat = this.vmNode.getFreshMeat();
+
+        if (!freshMeat.isEmpty()) {
+            this.children.addAll(freshMeat.stream().map(iMessNode -> new ConstructionTreeNode(this, iMessNode)).toList());
+        }
     }
 
     @Override
@@ -90,6 +94,6 @@ public class ConstructionTreeNode implements TreeNode {
 
     @Override
     public String toString() {
-        return this.vmNode.get;
+        return this.vmNode.getValue();
     }
 }

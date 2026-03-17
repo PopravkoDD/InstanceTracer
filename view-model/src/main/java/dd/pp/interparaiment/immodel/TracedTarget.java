@@ -7,9 +7,9 @@ import java.util.Map;
 import dd.pp.interparaiment.immodel.context.Path;
 
 public class TracedTarget implements IMessNode {
-    private String name;
+    private final String name;
     private final Map<Integer, CallingClass> callerClasses = new LinkedHashMap<>();
-    private ArrayList<IMessNode> freshMeat;
+    private final ArrayList<IMessNode> freshMeat = new ArrayList<>();
 
     public TracedTarget(final Path path) {
         this.name = path.target;

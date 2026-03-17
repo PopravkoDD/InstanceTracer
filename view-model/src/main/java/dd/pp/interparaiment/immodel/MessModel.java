@@ -12,7 +12,7 @@ import dd.pp.interparaiment.immodel.context.Path;
 public class MessModel implements IMessNode {
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final Map<Integer, TracedTarget> targets = new LinkedHashMap<>();
-    private ArrayList<IMessNode> freshMeat;
+    private final ArrayList<IMessNode> freshMeat = new ArrayList<>();
 
     public void put(final Path path) {
         lock.writeLock().lock();

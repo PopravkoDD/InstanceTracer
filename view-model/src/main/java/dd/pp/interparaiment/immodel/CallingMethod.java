@@ -1,18 +1,16 @@
 package dd.pp.interparaiment.immodel;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
 import dd.pp.interparaiment.immodel.context.Path;
-import dd.pp.interparaiment.immodel.context.RawPath;
 
 public class CallingMethod implements IMessNode {
-    private String name;
+    private final String name;
 
     private final Map<Integer, CallingLine> callingLines = new HashMap<>();
-    private ArrayList<IMessNode> freshMeat;
+    private final ArrayList<IMessNode> freshMeat = new ArrayList<>();
 
 
     public CallingMethod(final Path path) {
