@@ -43,7 +43,7 @@ public class MessModel implements IMessNode {
 
     @Override
     public String getValue() {
-        return "Root";
+        return "Mess";
     }
 
     public Lock getReadLock() {

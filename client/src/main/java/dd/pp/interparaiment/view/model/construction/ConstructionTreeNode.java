@@ -19,7 +19,7 @@ public class ConstructionTreeNode implements TreeNode {
         this.parent = parent;
         this.vmNode = node;
 
-        this.isLeaf = !(node instanceof CallingLine);
+        this.isLeaf = node instanceof CallingLine;
 
         syncModels();
     }
@@ -27,7 +27,7 @@ public class ConstructionTreeNode implements TreeNode {
     public void syncModels() {
         final ArrayList<IMessNode> freshMeat = this.vmNode.getFreshMeat();
 
-        if (!freshMeat.isEmpty()) {
+        if (freshMeat != null && !freshMeat.isEmpty()) {
             this.children.addAll(freshMeat.stream().map(iMessNode -> new ConstructionTreeNode(this, iMessNode)).toList());
         }
     }

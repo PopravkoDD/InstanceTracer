@@ -14,7 +14,9 @@ public class CallingClass implements IMessNode {
 
     public CallingClass(final Path path) {
         this.name = path.caller;
-        this.callingMethods.put(path.method.hashCode(), new CallingMethod(path));
+        final CallingMethod callingMethod = new CallingMethod(path);
+        this.callingMethods.put(path.method.hashCode(), callingMethod);
+        this.freshMeat.add(callingMethod);
     }
 
     public void put(final Path path) {

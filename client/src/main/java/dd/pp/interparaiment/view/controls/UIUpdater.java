@@ -22,9 +22,7 @@ public class UIUpdater {
 
     public void start() {
         future = EdtExecutorService.getScheduledExecutorInstance()
-                .scheduleWithFixedDelay(() -> {
-                    refreshUi();
-                }, 0, 500, TimeUnit.MILLISECONDS);
+                .scheduleWithFixedDelay(this::refreshUi, 0, 10000, TimeUnit.MILLISECONDS);
     }
 
     public void stop() {

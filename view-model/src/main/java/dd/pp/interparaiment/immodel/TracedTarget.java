@@ -13,7 +13,9 @@ public class TracedTarget implements IMessNode {
 
     public TracedTarget(final Path path) {
         this.name = path.target;
-        this.callerClasses.put(path.caller.hashCode(), new CallingClass(path));
+        final CallingClass callingClass = new CallingClass(path);
+        this.callerClasses.put(path.caller.hashCode(), callingClass);
+        this.freshMeat.add(callingClass);
     }
 
     public void put(final Path path) {

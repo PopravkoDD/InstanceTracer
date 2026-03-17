@@ -55,18 +55,14 @@ public class InstanceTrackerPanel extends JBPanel {
         //Tree view
         final JPanel treePanel = new JPanel(new BorderLayout());
 
-        final JComponent miniToolbar = createMiniToolbar();
-
-        treePanel.add(miniToolbar, BorderLayout.NORTH);
-
-
         final ConstructionTreeModel treeModel = new ConstructionTreeModel(this.viewModel.getMessModel());
-
-        JTree tree = new JTree(treeModel);
-
-        treePanel.add(new JBScrollPane(tree), BorderLayout.CENTER);
+        final JTree tree = new JTree(treeModel);
 
         this.updater = new UIUpdater(treePanel, treeModel::syncModels);
+
+        final JComponent miniToolbar = createMiniToolbar();
+        treePanel.add(miniToolbar, BorderLayout.NORTH);
+        treePanel.add(new JBScrollPane(tree), BorderLayout.CENTER);
 
         final JBSplitter splitter = new JBSplitter(false, 0.25f);
         splitter.setFirstComponent(treePanel);
@@ -79,7 +75,6 @@ public class InstanceTrackerPanel extends JBPanel {
 
         final DefaultActionGroup group = new DefaultActionGroup();
         final MessActionsContext state = new MessActionsContext(this.updater);
-
 
         final TrackerStartAction startAction = new TrackerStartAction(state, this.eventManager);
         final TrackerStopAction trackerStopAction = new TrackerStopAction(state, this.eventManager);

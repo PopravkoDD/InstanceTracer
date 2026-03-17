@@ -35,6 +35,6 @@ public class CallingLine implements IMessNode {
 
     @Override
     public String getValue() {
-        return Integer.toString(this.line);
+        return this.line + "(" + instances.size() + ")";
     }
 }
