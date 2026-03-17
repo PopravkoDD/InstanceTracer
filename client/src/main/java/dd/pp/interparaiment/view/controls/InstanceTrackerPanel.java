@@ -22,12 +22,13 @@ import dd.pp.interparaiment.event.requests.ShowMessageInConsoleRequest;
 import dd.pp.interparaiment.view.actions.ConfigureTrackerAction;
 import dd.pp.interparaiment.view.actions.TrackerStartAction;
 import dd.pp.interparaiment.view.actions.TrackerStopAction;
-import dd.pp.interparaiment.view.actions.TrackingProcessState;
+import dd.pp.interparaiment.view.actions.MessActionsContext;
 import dd.pp.interparaiment.view.model.construction.ConstructionTreeModel;
 import dd.pp.interparaiment.view.service.TracingService;
 
 public class InstanceTrackerPanel extends JBPanel {
 
+    private UIUpdater updater;
     private final EventManager eventManager;
     private final InspectorViewModel viewModel;
 
@@ -65,6 +66,8 @@ public class InstanceTrackerPanel extends JBPanel {
 
         treePanel.add(new JBScrollPane(tree), BorderLayout.CENTER);
 
+        this.updater = new UIUpdater(treePanel, treeModel::syncModels);
+
         final JBSplitter splitter = new JBSplitter(false, 0.25f);
         splitter.setFirstComponent(treePanel);
         splitter.setSecondComponent(new JBScrollPane(logView));
@@ -75,7 +78,7 @@ public class InstanceTrackerPanel extends JBPanel {
     private JComponent createMiniToolbar() {
 
         final DefaultActionGroup group = new DefaultActionGroup();
-        final TrackingProcessState state = new TrackingProcessState();
+        final MessActionsContext state = new MessActionsContext(this.updater);
 
 
         final TrackerStartAction startAction = new TrackerStartAction(state, this.eventManager);

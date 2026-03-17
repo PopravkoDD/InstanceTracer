@@ -1,8 +1,9 @@
-    package dd.pp.interparaiment.view.model.construction;
+package dd.pp.interparaiment.view.model.construction;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.concurrent.locks.Lock;
 
 import javax.swing.event.TreeModelListener;
 import javax.swing.tree.TreeModel;
@@ -22,7 +23,13 @@ public class ConstructionTreeModel implements TreeModel {
     }
 
     public void syncModels() {
-
+        final Lock readLock = messModel.getReadLock();
+        readLock.lock();
+        try {
+            dfsPreOrder();
+        } finally {
+            readLock.unlock();
+        }
     }
 
     public  void dfsPreOrder() {
@@ -66,7 +73,7 @@ public class ConstructionTreeModel implements TreeModel {
 
     @Override
     public void valueForPathChanged(TreePath path, Object newValue) {
-
+        // ignored
     }
 
     @Override
@@ -76,11 +83,11 @@ public class ConstructionTreeModel implements TreeModel {
 
     @Override
     public void addTreeModelListener(TreeModelListener l) {
-
+        // ignored
     }
 
     @Override
     public void removeTreeModelListener(TreeModelListener l) {
-
+        // ignored
     }
 }

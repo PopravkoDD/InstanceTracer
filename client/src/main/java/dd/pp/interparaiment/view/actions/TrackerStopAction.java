@@ -11,9 +11,9 @@ import dd.pp.interparaiment.event.requests.StopInspectionRequest;
 
 public class TrackerStopAction extends AnAction {
     private final EventManager eventManager;
-    private final TrackingProcessState state;
+    private final MessActionsContext state;
 
-    public TrackerStopAction(final TrackingProcessState state, final EventManager eventManager) {
+    public TrackerStopAction(final MessActionsContext state, final EventManager eventManager) {
         super("Stop Tracking", "Closes connection with tracking agent", AllIcons.Actions.Suspend);
         this.state = state;
         this.eventManager = eventManager;

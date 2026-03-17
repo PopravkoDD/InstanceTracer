@@ -39,4 +39,9 @@ public class CallingMethod implements IMessNode {
 
         return freshMeat;
     }
+
+    @Override
+    public String getValue() {
+        return this.name;
+    }
 }

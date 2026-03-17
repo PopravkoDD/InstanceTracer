@@ -8,9 +8,9 @@ import com.intellij.openapi.actionSystem.AnActionEvent;
 
 public class ConfigureTrackerAction extends AnAction {
 
-    private final TrackingProcessState state;
+    private final MessActionsContext state;
 
-    public ConfigureTrackerAction(final TrackingProcessState state) {
+    public ConfigureTrackerAction(final MessActionsContext state) {
         super("Configure Tracking", "Opens Instance tacker config", AllIcons.General.Settings);
         this.state = state;
     }

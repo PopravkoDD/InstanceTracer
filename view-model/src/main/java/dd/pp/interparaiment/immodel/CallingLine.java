@@ -32,4 +32,9 @@ public class CallingLine implements IMessNode {
     public ArrayList<IMessNode> getFreshMeat() {
         return null;
     }
+
+    @Override
+    public String getValue() {
+        return Integer.toString(this.line);
+    }
 }

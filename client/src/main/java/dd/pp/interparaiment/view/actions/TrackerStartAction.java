@@ -11,9 +11,9 @@ import dd.pp.interparaiment.event.requests.StartInspectionRequest;
 
 public class TrackerStartAction extends AnAction {
     private final EventManager eventManager;
-    private final TrackingProcessState state;
+    private final MessActionsContext state;
 
-    public TrackerStartAction(final TrackingProcessState state, final EventManager eventManager) {
+    public TrackerStartAction(final MessActionsContext state, final EventManager eventManager) {
         super("Start Tracking", "Starts connection with tracking agent", AllIcons.Debugger.ThreadRunning);
         this.state = state;
         this.eventManager = eventManager;

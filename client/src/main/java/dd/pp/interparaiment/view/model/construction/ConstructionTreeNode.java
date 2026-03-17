@@ -35,8 +35,6 @@ public class ConstructionTreeNode implements TreeNode {
 
     @Override
     public int getChildCount() {
-
-
         return this.children.size();
     }
 
@@ -88,5 +86,10 @@ public class ConstructionTreeNode implements TreeNode {
 
     public List<ConstructionTreeNode> getChildren() {
         return this.children;
+    }
+
+    @Override
+    public String toString() {
+        return this.vmNode.get;
     }
 }

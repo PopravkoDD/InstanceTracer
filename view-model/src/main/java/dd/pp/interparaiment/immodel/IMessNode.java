@@ -1,8 +1,8 @@
 package dd.pp.interparaiment.immodel;
 
 import java.util.ArrayList;
-import java.util.Collection;
 
 public interface IMessNode {
     ArrayList<IMessNode> getFreshMeat();
+    String getValue();
 }
