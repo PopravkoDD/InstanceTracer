@@ -61,6 +61,15 @@ public class MessLogView extends JPanel {
         printWithLabel(label, message, ConsoleViewContentType.LOG_ERROR_OUTPUT);
     }
 
+    public void logEmpty() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(this::logEmpty);
+            return;
+        }
+
+        this.consoleView.print(System.lineSeparator(), ConsoleViewContentType.SYSTEM_OUTPUT);
+    }
+
     public void logStringWithYellowLabel(final String label, final String message) {
         if (!SwingUtilities.isEventDispatchThread()) {
             SwingUtilities.invokeLater(() -> logStringWithYellowLabel(label, message));
