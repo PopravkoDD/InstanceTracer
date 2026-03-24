@@ -55,7 +55,9 @@ public class InstanceCreatedListener implements IListener<InstanceCreatedEvent> 
     }
 
     private void logRaw(final Path path) {
-        this.logView.logStringWithRedLabel(path.target, path.caller + "#" + path.method + "." + path.line + "(" + path.instanceHash + ")");
+        final String[] split = CLASS_NAME_SPLITTER.split(path.target);
+        this.logView.logStringWithRedLabel(split[split.length - 1],
+                path.caller + "#" + path.method + "." + path.line + "(" + "(hash:" + path.instanceHash + ")");
     }
 
     private void logWithHyperlink(PsiClass psiClass, final Path path, final OpenFileHyperlinkInfo linkToFile) {
