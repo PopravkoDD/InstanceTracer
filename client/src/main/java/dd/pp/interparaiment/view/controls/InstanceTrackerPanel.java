@@ -18,12 +18,16 @@ import com.intellij.ui.components.JBScrollPane;
 
 import dd.pp.interparaiment.InspectorViewModel;
 import dd.pp.interparaiment.event.EventManager;
+import dd.pp.interparaiment.event.requests.InstanceCreatedEvent;
 import dd.pp.interparaiment.event.requests.ShowMessageInConsoleRequest;
+import dd.pp.interparaiment.view.listeners.InstanceCreatedListener;
 import dd.pp.interparaiment.view.actions.ConfigureTrackerAction;
+import dd.pp.interparaiment.view.actions.DumpTheMessAction;
 import dd.pp.interparaiment.view.actions.TrackerStartAction;
 import dd.pp.interparaiment.view.actions.TrackerStopAction;
 import dd.pp.interparaiment.view.actions.MessActionsContext;
 import dd.pp.interparaiment.view.model.construction.ConstructionTreeModel;
+import dd.pp.interparaiment.view.model.construction.ConstructionTreeNode;
 import dd.pp.interparaiment.view.service.TracingService;
 
 public class InstanceTrackerPanel extends JBPanel {
@@ -41,24 +45,25 @@ public class InstanceTrackerPanel extends JBPanel {
         JBLabel title = new JBLabel("Instance tracker");
         title.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
-        final JComponent view = initView();
+        final JComponent view = initView(project);
 
         add(title, BorderLayout.NORTH);
         add(view, BorderLayout.CENTER);
     }
 
-    private JComponent initView() {
-        final TrackerLogView logView = new TrackerLogView();
+    private JComponent initView(final Project project) {
+        final MessLogView logView = new MessLogView(project);
 
-        eventManager.subscribe(ShowMessageInConsoleRequest.class, data -> logView.appendLine(data.getData()));
+        eventManager.subscribe(ShowMessageInConsoleRequest.class, data -> logView.logInfo(data.getData()));
+        eventManager.subscribe(InstanceCreatedEvent.class, new InstanceCreatedListener(logView, project));
 
         //Tree view
         final JPanel treePanel = new JPanel(new BorderLayout());
 
-        final ConstructionTreeModel treeModel = new ConstructionTreeModel(this.viewModel.getMessModel());
+        final ConstructionTreeModel treeModel = new ConstructionTreeModel(this.viewModel.getMessModel(), new ConstructionTreeNode(null, this.viewModel.getMessModel()));
         final JTree tree = new JTree(treeModel);
 
-        this.updater = new UIUpdater(treePanel, treeModel::syncModels);
+        this.updater = new UIUpdater(tree, treeModel::syncModels);
 
         final JComponent miniToolbar = createMiniToolbar();
         treePanel.add(miniToolbar, BorderLayout.NORTH);
@@ -76,11 +81,13 @@ public class InstanceTrackerPanel extends JBPanel {
         final DefaultActionGroup group = new DefaultActionGroup();
         final MessActionsContext state = new MessActionsContext(this.updater);
 
+        final DumpTheMessAction dumpMessAction = new DumpTheMessAction(state, this.eventManager);
         final TrackerStartAction startAction = new TrackerStartAction(state, this.eventManager);
         final TrackerStopAction trackerStopAction = new TrackerStopAction(state, this.eventManager);
         final ConfigureTrackerAction configureTrackerAction = new ConfigureTrackerAction(state);
 
         group.add(startAction);
+        group.add(dumpMessAction);
         group.add(trackerStopAction);
 
         group.addSeparator();

@@ -7,29 +7,41 @@ import java.util.NoSuchElementException;
 
 import dd.pp.interparaiment.immodel.CallingLine;
 import dd.pp.interparaiment.immodel.IMessNode;
+
+import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreeNode;
 
 public class ConstructionTreeNode implements TreeNode {
     private final IMessNode vmNode;
-    private final boolean isLeaf;
-    private ConstructionTreeNode parent;
-    private final List<ConstructionTreeNode> children = new ArrayList<>(100);
 
+    private final boolean isLeaf;
+    private final ConstructionTreeNode parent;
+    private final List<ConstructionTreeNode> children = new ArrayList<>(100);
     public ConstructionTreeNode(final ConstructionTreeNode parent, final IMessNode node) {
         this.parent = parent;
         this.vmNode = node;
 
         this.isLeaf = node instanceof CallingLine;
 
-        syncModels();
+//        syncModels();
     }
 
-    public void syncModels() {
+    public int[] syncModels() {
         final ArrayList<IMessNode> freshMeat = this.vmNode.getFreshMeat();
 
         if (freshMeat != null && !freshMeat.isEmpty()) {
-            this.children.addAll(freshMeat.stream().map(iMessNode -> new ConstructionTreeNode(this, iMessNode)).toList());
+            final int[] indexes = new int[freshMeat.size()];
+
+            for (int i = 0; i < freshMeat.size(); i++) {
+                IMessNode iMessNode = freshMeat.get(i);
+                this.children.add(new ConstructionTreeNode(this, iMessNode));
+                indexes[i] = this.children.size() - 1;
+            }
+
+            return indexes;
         }
+
+        return null;
     }
 
     @Override
@@ -95,5 +107,9 @@ public class ConstructionTreeNode implements TreeNode {
     @Override
     public String toString() {
         return this.vmNode.getValue();
+    }
+
+    public IMessNode getVmNode() {
+        return vmNode;
     }
 }

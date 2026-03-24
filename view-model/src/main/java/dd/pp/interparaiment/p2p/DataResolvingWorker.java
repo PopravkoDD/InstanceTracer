@@ -5,7 +5,9 @@ import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 
 import dd.pp.interparaiment.InspectorViewModel;
+import dd.pp.interparaiment.event.requests.InstanceCreatedEvent;
 import dd.pp.interparaiment.event.requests.ShowMessageInConsoleRequest;
+import dd.pp.interparaiment.immodel.context.Path;
 import dd.pp.interparaiment.p2p.resolver.StringMessageResolver;
 
 public class DataResolvingWorker extends Thread {
@@ -44,9 +46,9 @@ public class DataResolvingWorker extends Thread {
     }
     private void handleString(byte[] payload) {
         final String message = new String(payload, StandardCharsets.UTF_8);
-        this.viewModel.getEventManager().notify(new ShowMessageInConsoleRequest("Got a message: " + message));
-
-        this.viewModel.getMessModel().put(StringMessageResolver.resolve(message));
+        final Path path = StringMessageResolver.resolve(message);
+        this.viewModel.getMessModel().put(path);
+        this.viewModel.getEventManager().notify(new InstanceCreatedEvent(path));
     }
     private void handleSingleRawMessage(byte[] payload) {
     }

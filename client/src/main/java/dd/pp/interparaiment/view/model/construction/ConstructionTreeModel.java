@@ -5,21 +5,20 @@ import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.locks.Lock;
 
-import javax.swing.event.TreeModelListener;
-import javax.swing.tree.TreeModel;
-import javax.swing.tree.TreePath;
+import javax.swing.tree.DefaultTreeModel;
 
 import dd.pp.interparaiment.immodel.MessModel;
 
-public class ConstructionTreeModel implements TreeModel {
+public class ConstructionTreeModel extends DefaultTreeModel {
 
-    private MessModel messModel;
+    private final MessModel messModel;
 
-    private ConstructionTreeNode root;
+    private final ConstructionTreeNode root;
 
-    public ConstructionTreeModel(final MessModel messModel) {
+    public ConstructionTreeModel(final MessModel messModel, final ConstructionTreeNode root) {
+        super(root);
         this.messModel = messModel;
-        this.root = new ConstructionTreeNode(null, messModel);
+        this.root = root;
     }
 
     public void syncModels() {
@@ -27,6 +26,7 @@ public class ConstructionTreeModel implements TreeModel {
         readLock.lock();
         try {
             dfsPreOrder();
+//            this.reload();
         } finally {
             readLock.unlock();
         }
@@ -39,7 +39,7 @@ public class ConstructionTreeModel implements TreeModel {
         while (!stack.isEmpty()) {
             ConstructionTreeNode current = stack.pop();
 
-            current.syncModels();
+            syncModels(current);
 
             List<ConstructionTreeNode> children = current.getChildren();
             for (int i = children.size() - 1; i >= 0; i--) {
@@ -51,43 +51,56 @@ public class ConstructionTreeModel implements TreeModel {
         }
     }
 
-    @Override
-    public Object getRoot() {
-        return this.root;
+    private void syncModels(ConstructionTreeNode current) {
+        if (current.isLeaf() && !current.getVmNode().getFreshMeat().isEmpty()) {
+            nodeChanged(current);
+        } else {
+            final int[] newIndexes = current.syncModels();
+
+            if (newIndexes != null) {
+                nodesWereInserted(current, newIndexes);
+            }
+        }
+
     }
 
-    @Override
-    public Object getChild(Object parent, int index) {
-        return ((ConstructionTreeNode) parent).getChildAt(index);
-    }
-
-    @Override
-    public int getChildCount(Object parent) {
-        return ((ConstructionTreeNode) parent).getChildCount();
-    }
-
-    @Override
-    public boolean isLeaf(Object node) {
-        return ((ConstructionTreeNode) node).isLeaf();
-    }
-
-    @Override
-    public void valueForPathChanged(TreePath path, Object newValue) {
-        // ignored
-    }
-
-    @Override
-    public int getIndexOfChild(Object parent, Object child) {
-        return ((ConstructionTreeNode) parent).getIndex(((ConstructionTreeNode) child));
-    }
-
-    @Override
-    public void addTreeModelListener(TreeModelListener l) {
-        // ignored
-    }
-
-    @Override
-    public void removeTreeModelListener(TreeModelListener l) {
-        // ignored
-    }
+//    @Override
+//    public Object getRoot() {
+//        return this.root;
+//    }
+//
+//    @Override
+//    public Object getChild(Object parent, int index) {
+//        return ((ConstructionTreeNode) parent).getChildAt(index);
+//    }
+//
+//    @Override
+//    public int getChildCount(Object parent) {
+//        return ((ConstructionTreeNode) parent).getChildCount();
+//    }
+//
+//    @Override
+//    public boolean isLeaf(Object node) {
+//        return ((ConstructionTreeNode) node).isLeaf();
+//    }
+//
+//    @Override
+//    public void valueForPathChanged(TreePath path, Object newValue) {
+//        // ignored
+//    }
+//
+//    @Override
+//    public int getIndexOfChild(Object parent, Object child) {
+//        return ((ConstructionTreeNode) parent).getIndex(((ConstructionTreeNode) child));
+//    }
+//
+//    @Override
+//    public void addTreeModelListener(TreeModelListener l) {
+//        // ignored
+//    }
+//
+//    @Override
+//    public void removeTreeModelListener(TreeModelListener l) {
+//        // ignored
+//    }
 }

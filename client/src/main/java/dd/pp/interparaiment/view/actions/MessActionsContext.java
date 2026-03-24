@@ -15,11 +15,10 @@ public class MessActionsContext {
     }
 
     public void setRunning(final boolean isRunning) {
-        if (!this.isRunning && isRunning) {
-            updater.start();
-        } else if (this.isRunning && !isRunning) {
-            updater.stop();
-        }
         this.isRunning = isRunning;
+    }
+
+    public UIUpdater getUpdater() {
+        return this.updater;
     }
 }
