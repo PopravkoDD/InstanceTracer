@@ -106,10 +106,24 @@ public class ConstructionTreeNode implements TreeNode {
 
     @Override
     public String toString() {
-        return this.vmNode.getValue();
+        return this.vmNode.getValue() + "(" + this.getLeafsCount() + ")";
     }
 
     public IMessNode getVmNode() {
         return vmNode;
+    }
+
+    public int getLeafsCount() {
+        if (this.isLeaf) {
+            return vmNode.getNodesCount();
+        }
+
+        int count = 0;
+
+        for (ConstructionTreeNode child : this.children) {
+            count += child.getLeafsCount();
+        }
+
+        return count;
     }
 }

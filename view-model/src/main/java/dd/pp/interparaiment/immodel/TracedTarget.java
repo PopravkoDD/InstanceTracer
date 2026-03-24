@@ -33,6 +33,11 @@ public class TracedTarget implements IMessNode {
     }
 
     @Override
+    public int getNodesCount() {
+        return this.callerClasses.size();
+    }
+
+    @Override
     public ArrayList<IMessNode> getFreshMeat() {
         final ArrayList<IMessNode> freshMeat = new ArrayList<>(this.freshMeat);
         this.freshMeat.clear();

@@ -27,6 +27,11 @@ public class CallingLine implements IMessNode {
     }
 
     @Override
+    public int getNodesCount() {
+        return this.instances.size();
+    }
+
+    @Override
     public ArrayList<IMessNode> getFreshMeat() {
         final ArrayList<IMessNode> freshMeat = new ArrayList<>(this.freshMeat);
         this.freshMeat.clear();
@@ -36,6 +41,7 @@ public class CallingLine implements IMessNode {
 
     @Override
     public String getValue() {
-        return this.line + "(" + instances.size() + ")";
+//        return this.line + "(" + instances.size() + ")";
+        return String.valueOf(this.line);
     }
 }

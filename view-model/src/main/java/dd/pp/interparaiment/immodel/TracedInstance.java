@@ -15,6 +15,11 @@ public class TracedInstance implements IMessNode{
     }
 
     @Override
+    public int getNodesCount() {
+        return 0;
+    }
+
+    @Override
     public ArrayList<IMessNode> getFreshMeat() {
         return null;
     }

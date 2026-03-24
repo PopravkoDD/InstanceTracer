@@ -33,6 +33,11 @@ public class CallingMethod implements IMessNode {
     }
 
     @Override
+    public int getNodesCount() {
+        return this.callingLines.size();
+    }
+
+    @Override
     public ArrayList<IMessNode> getFreshMeat() {
         final ArrayList<IMessNode> freshMeat = new ArrayList<>(this.freshMeat);
         this.freshMeat.clear();
