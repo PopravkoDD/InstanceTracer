@@ -7,13 +7,12 @@ import java.util.NoSuchElementException;
 
 import dd.pp.interparaiment.immodel.CallingLine;
 import dd.pp.interparaiment.immodel.IMessNode;
+import dd.pp.interparaiment.view.helpers.ClassNameStripper;
 
-import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreeNode;
 
 public class ConstructionTreeNode implements TreeNode {
     private final IMessNode vmNode;
-
     private final boolean isLeaf;
     private final ConstructionTreeNode parent;
     private final List<ConstructionTreeNode> children = new ArrayList<>(100);
@@ -25,6 +24,8 @@ public class ConstructionTreeNode implements TreeNode {
 
 //        syncModels();
     }
+
+    private String simpleValue = null;
 
     public int[] syncModels() {
         final ArrayList<IMessNode> freshMeat = this.vmNode.getFreshMeat();
@@ -107,6 +108,17 @@ public class ConstructionTreeNode implements TreeNode {
     @Override
     public String toString() {
         return this.vmNode.getValue() + "(" + this.getLeafsCount() + ")";
+    }
+
+    public String getSimpleValue() {
+        if (this.simpleValue == null) {
+            this.simpleValue = ClassNameStripper.stripFullName(this.vmNode.getValue());
+        }
+        return this.simpleValue + "(" + this.getLeafsCount() + ")";
+    }
+
+    public String getFullValue() {
+        return this.vmNode.getValue();
     }
 
     public IMessNode getVmNode() {

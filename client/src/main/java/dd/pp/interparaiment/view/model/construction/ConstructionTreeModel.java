@@ -63,44 +63,4 @@ public class ConstructionTreeModel extends DefaultTreeModel {
         }
 
     }
-
-//    @Override
-//    public Object getRoot() {
-//        return this.root;
-//    }
-//
-//    @Override
-//    public Object getChild(Object parent, int index) {
-//        return ((ConstructionTreeNode) parent).getChildAt(index);
-//    }
-//
-//    @Override
-//    public int getChildCount(Object parent) {
-//        return ((ConstructionTreeNode) parent).getChildCount();
-//    }
-//
-//    @Override
-//    public boolean isLeaf(Object node) {
-//        return ((ConstructionTreeNode) node).isLeaf();
-//    }
-//
-//    @Override
-//    public void valueForPathChanged(TreePath path, Object newValue) {
-//        // ignored
-//    }
-//
-//    @Override
-//    public int getIndexOfChild(Object parent, Object child) {
-//        return ((ConstructionTreeNode) parent).getIndex(((ConstructionTreeNode) child));
-//    }
-//
-//    @Override
-//    public void addTreeModelListener(TreeModelListener l) {
-//        // ignored
-//    }
-//
-//    @Override
-//    public void removeTreeModelListener(TreeModelListener l) {
-//        // ignored
-//    }
 }

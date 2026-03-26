@@ -22,15 +22,15 @@ import dd.pp.interparaiment.event.IListener;
 import dd.pp.interparaiment.event.requests.InstanceCreatedEvent;
 import dd.pp.interparaiment.immodel.context.Path;
 import dd.pp.interparaiment.view.controls.MessLogView;
+import dd.pp.interparaiment.view.helpers.ClassNameStripper;
 
-public class InstanceCreatedListener implements IListener<InstanceCreatedEvent> {
-    private static final Pattern CLASS_NAME_SPLITTER = Pattern.compile("\\.");
+public class InstanceConstructionListener implements IListener<InstanceCreatedEvent> {
     private final MessLogView logView;
     private final Project project;
     private final ExecutorService executor;
     private String previousCallerClass = "";
 
-    public InstanceCreatedListener(final MessLogView logView, final Project project) {
+    public InstanceConstructionListener(final MessLogView logView, final Project project) {
         this.logView = logView;
         this.project = project;
 
@@ -96,22 +96,21 @@ public class InstanceCreatedListener implements IListener<InstanceCreatedEvent> 
 
     @NotNull
     private ConstructionLogContext createRawContext(final Path path, final boolean printNewCaller) {
-        final String[] labelSplit = CLASS_NAME_SPLITTER.split(path.target);
+        final String label = ClassNameStripper.stripFullName(path.target);
         final String message = path.caller + "#" + path.method + "." + path.line + "(" + "(hash:" + path.instanceHash + ")";
-
         this.previousCallerClass = path.caller;
 
-        return new ConstructionLogContext(labelSplit[labelSplit.length - 1], message, null, path.caller, printNewCaller);
+        return new ConstructionLogContext(label, message, null, path.caller, printNewCaller);
     }
 
     private ConstructionLogContext createContextWithHyperlink(PsiClass psiClass, final Path path, final OpenFileHyperlinkInfo linkToFile, final boolean printNewCaller) {
-        final String[] labelSplit = CLASS_NAME_SPLITTER.split(path.target);
+        final String label = ClassNameStripper.stripFullName(path.target);
         final String callerName = psiClass.getName();
         final String message = callerName + "." + path.method + "(hash:" + path.instanceHash + ")";
 
         this.previousCallerClass = path.caller;
 
-        return new ConstructionLogContext(labelSplit[labelSplit.length - 1], message, linkToFile, callerName, printNewCaller);
+        return new ConstructionLogContext(label, message, linkToFile, callerName, printNewCaller);
     }
 
     public void dispose() {

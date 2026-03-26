@@ -1,11 +1,17 @@
 package dd.pp.interparaiment.view.controls;
 
 import java.awt.BorderLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JTree;
+import javax.swing.SwingUtilities;
+import javax.swing.tree.TreePath;
+
+import org.jetbrains.annotations.NotNull;
 
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionToolbar;
@@ -20,14 +26,16 @@ import dd.pp.interparaiment.InspectorViewModel;
 import dd.pp.interparaiment.event.EventManager;
 import dd.pp.interparaiment.event.requests.InstanceCreatedEvent;
 import dd.pp.interparaiment.event.requests.ShowMessageInConsoleRequest;
-import dd.pp.interparaiment.view.listeners.InstanceCreatedListener;
+import dd.pp.interparaiment.view.listeners.InstanceConstructionListener;
 import dd.pp.interparaiment.view.actions.ConfigureTrackerAction;
 import dd.pp.interparaiment.view.actions.DumpTheMessAction;
 import dd.pp.interparaiment.view.actions.TrackerStartAction;
 import dd.pp.interparaiment.view.actions.TrackerStopAction;
 import dd.pp.interparaiment.view.actions.MessActionsContext;
+import dd.pp.interparaiment.view.listeners.MessTreeMouseListener;
 import dd.pp.interparaiment.view.model.construction.ConstructionTreeModel;
 import dd.pp.interparaiment.view.model.construction.ConstructionTreeNode;
+import dd.pp.interparaiment.view.renderers.MessTreeRenderer;
 import dd.pp.interparaiment.view.service.TracingService;
 
 public class InstanceTrackerPanel extends JBPanel {
@@ -54,14 +62,14 @@ public class InstanceTrackerPanel extends JBPanel {
     private JComponent initView(final Project project) {
         final MessLogView logView = new MessLogView(project);
 
-        eventManager.subscribe(ShowMessageInConsoleRequest.class, data -> logView.logInfo(data.getData()));
-        eventManager.subscribe(InstanceCreatedEvent.class, new InstanceCreatedListener(logView, project));
+        this.eventManager.subscribe(ShowMessageInConsoleRequest.class, data -> logView.logInfo(data.getData()));
+        this.eventManager.subscribe(InstanceCreatedEvent.class, new InstanceConstructionListener(logView, project));
 
         //Tree view
         final JPanel treePanel = new JPanel(new BorderLayout());
 
         final ConstructionTreeModel treeModel = new ConstructionTreeModel(this.viewModel.getMessModel(), new ConstructionTreeNode(null, this.viewModel.getMessModel()));
-        final JTree tree = new JTree(treeModel);
+        final JTree tree = createMessTree(treeModel, project);
 
         this.updater = new UIUpdater(tree, treeModel::syncModels);
 
@@ -74,6 +82,16 @@ public class InstanceTrackerPanel extends JBPanel {
         splitter.setSecondComponent(new JBScrollPane(logView));
 
         return splitter;
+    }
+
+    @NotNull
+    private static JTree createMessTree(ConstructionTreeModel treeModel, final Project project) {
+        final JTree tree = new JTree(treeModel);
+        tree.setCellRenderer(new MessTreeRenderer());
+
+        tree.addMouseListener(new MessTreeMouseListener(tree, project));
+
+        return tree;
     }
 
     private JComponent createMiniToolbar() {
