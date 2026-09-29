@@ -63,7 +63,7 @@ public class InstanceConstructionListener implements IListener<InstanceCreatedEv
     private void logContext(final ConstructionLogContext context) {
         if (context.printNewCaller) {
             this.logView.logEmpty();
-            this.logView.logStringWithYellowLabel(context.label, "--------------------------New Caller: " + context.callerName + "--------------------------");
+            this.logView.logStringWithYellowLabel(context.callerName, "--------------------------New Caller: " + context.callerName + "--------------------------");
         }
 
         if (context.hyperlink == null) {
@@ -96,17 +96,17 @@ public class InstanceConstructionListener implements IListener<InstanceCreatedEv
 
     @NotNull
     private ConstructionLogContext createRawContext(final Path path, final boolean printNewCaller) {
-        final String label = ClassNameStripper.stripFullName(path.target);
-        final String message = path.caller + "#" + path.method + "." + path.line + "(" + "(hash:" + path.instanceHash + ")";
+        final String label = ClassNameStripper.stripFullName(path.target) + "@" + path.instanceHash;
+        final String message = path.caller + "#" + path.method + ":" + path.line;
         this.previousCallerClass = path.caller;
 
         return new ConstructionLogContext(label, message, null, path.caller, printNewCaller);
     }
 
     private ConstructionLogContext createContextWithHyperlink(PsiClass psiClass, final Path path, final OpenFileHyperlinkInfo linkToFile, final boolean printNewCaller) {
-        final String label = ClassNameStripper.stripFullName(path.target);
+        final String label = ClassNameStripper.stripFullName(path.target) + "@" + path.instanceHash;
         final String callerName = psiClass.getName();
-        final String message = callerName + "." + path.method + "(hash:" + path.instanceHash + ")";
+        final String message = callerName + "#" + path.method;
 
         this.previousCallerClass = path.caller;
 

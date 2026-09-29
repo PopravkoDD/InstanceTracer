@@ -79,7 +79,7 @@ public class InstanceTrackerPanel extends JBPanel {
 
         final JBSplitter splitter = new JBSplitter(false, 0.25f);
         splitter.setFirstComponent(treePanel);
-        splitter.setSecondComponent(new JBScrollPane(logView));
+        splitter.setSecondComponent(logView);
 
         return splitter;
     }

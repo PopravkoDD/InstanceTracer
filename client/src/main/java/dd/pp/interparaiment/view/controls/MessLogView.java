@@ -3,6 +3,7 @@ package dd.pp.interparaiment.view.controls;
 import java.awt.BorderLayout;
 
 import javax.swing.JPanel;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 
 import com.intellij.execution.filters.HyperlinkInfo;
@@ -10,6 +11,9 @@ import com.intellij.execution.filters.TextConsoleBuilder;
 import com.intellij.execution.filters.TextConsoleBuilderFactory;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
+import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.openapi.actionSystem.ActionToolbar;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.project.Project;
 
 public class MessLogView extends JPanel {
@@ -23,6 +27,16 @@ public class MessLogView extends JPanel {
         this.consoleView = builder.getConsole();
 
         add(this.consoleView.getComponent(), BorderLayout.CENTER);
+
+        final DefaultActionGroup actionGroup = new DefaultActionGroup();
+
+        actionGroup.addAll(this.consoleView.createConsoleActions());
+
+        final ActionToolbar toolbar = ActionManager.getInstance()
+                .createActionToolbar("Tracker Console", actionGroup, true);
+
+        toolbar.setOrientation(SwingConstants.VERTICAL);
+        add(toolbar.getComponent(), BorderLayout.EAST);
     }
 
     public void logInfo(final String message) {
