@@ -9,21 +9,30 @@ import java.util.jar.JarFile;
 import dd.pp.interparaiment.BootstrapHookBridge;
 import dd.pp.interparaiment.bbhooks.ConstructionTracker;
 import dd.pp.interparaiment.communicator.AgentWriter;
+import dd.pp.interparaiment.configuration.AgentArgumentsResolver;
+import dd.pp.interparaiment.configuration.AgentConfiguration;
 
 import static dd.pp.interparaiment.ULTRAHELPER.flex;
 
 public class InstanceTracerAgent {
     public static void premain(String agentArgs, Instrumentation inst) {
+        final AgentConfiguration configuration;
+        try {
+            configuration = AgentArgumentsResolver.resolve(agentArgs);
+        } catch (IllegalArgumentException e) {
+            System.err.println("Instance tracer disabled: " + e.getMessage());
+            return;
+        }
+
         System.err.println("Instance tracer attached, NICE");
 
         flex();
 
-        final String[] splitArgs = agentArgs.split(",");
-        initHookBridge(inst, getBridgePathFromArgs(splitArgs));
+        initHookBridge(inst, configuration.getBridgePath());
 
-        attachTrackers(inst, splitArgs);
+        attachTrackers(inst, configuration);
 
-        initAgentPeer();
+        initAgentPeer(configuration);
     }
 
     private static void initHookBridge(Instrumentation inst, final String bridgeJarPath) {
@@ -34,32 +43,21 @@ public class InstanceTracerAgent {
         }
     }
 
-    private static String getBridgePathFromArgs(String[] args) {
-        for (String arg : args) {
-            if (arg.startsWith("BridgePath")) {
-                 return arg.split("=")[1];
-            }
-        }
-        return null;
-    }
-
     private static void appendBridgeToBootstrap(final Instrumentation inst, final String pathToHookJar) throws URISyntaxException, java.io.IOException {
         File jar = new File(pathToHookJar);
         inst.appendToBootstrapClassLoaderSearch(new JarFile(jar));
         System.err.println("BOOTSTRAP APPENDED: " + jar);
     }
 
-    private static void attachTrackers(final Instrumentation instrumentation, final String[] args) {
-        for (String arg : args) {
-            if (arg.startsWith("TraceTarget")) {
-                ConstructionTracker.attachTracker(instrumentation, arg.split("=")[1]);
-            }
+    private static void attachTrackers(final Instrumentation instrumentation, final AgentConfiguration configuration) {
+        for (String target : configuration.getTraceTargets()) {
+            ConstructionTracker.attachTracker(instrumentation, target);
         }
     }
 
-    private static void initAgentPeer() {
+    private static void initAgentPeer(final AgentConfiguration configuration) {
         try {
-            final AgentWriter instance = AgentWriter.getInstance();
+            final AgentWriter instance = AgentWriter.getInstance(configuration);
 
             BootstrapHookBridge.getInstance().setPeerNotificator(createdHash -> {
                 final Object createdInstance = BootstrapHookBridge.getInstance().getTrackedInstances().get(createdHash);

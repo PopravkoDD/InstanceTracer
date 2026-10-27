@@ -8,23 +8,27 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import dd.pp.interparaiment.configuration.AgentConfiguration;
+
 public class AgentWriter {
-    private static final String host = "127.0.0.1";
-    private static final int port = 35824;
+    private final String host;
+    private final int port;
     private static AgentWriter instance;
 
     private Socket socket;
     private DataOutputStream out;
     private final AtomicBoolean open = new AtomicBoolean(false);
 
-    private AgentWriter() throws IOException {
+    private AgentWriter(AgentConfiguration configuration) throws IOException {
+        this.host = configuration.getHost();
+        this.port = configuration.getPort();
         Runtime.getRuntime().addShutdownHook(new Thread(this::close));
         init();
     }
 
-    public static AgentWriter getInstance() throws IOException {
+    public static AgentWriter getInstance(AgentConfiguration configuration) throws IOException {
         if (instance == null) {
-            instance = new AgentWriter();
+            instance = new AgentWriter(configuration);
         }
 
         return instance;
