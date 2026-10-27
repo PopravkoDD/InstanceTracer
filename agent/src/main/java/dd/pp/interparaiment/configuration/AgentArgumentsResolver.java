@@ -12,6 +12,11 @@ public final class AgentArgumentsResolver {
     }
 
     public static AgentConfiguration resolve(String agentArgs) {
+        final Map<String, List<String>> arguments = resolveArguments(agentArgs);
+        return createAgentConfiguration(arguments);
+    }
+
+    private static Map<String, List<String>> resolveArguments(String agentArgs) {
         final Map<String, List<String>> arguments = new HashMap<>();
         if (agentArgs != null && !agentArgs.isBlank()) {
             for (String argument : agentArgs.split(",", -1)) {
@@ -28,17 +33,12 @@ public final class AgentArgumentsResolver {
             }
         }
 
-        final List<String> missingArguments = new ArrayList<>();
-        for (String name : MANDATORY_ARGUMENTS) {
-            final List<String> values = arguments.get(name);
-            if (values == null || values.stream().anyMatch(String::isBlank)) {
-                missingArguments.add(name);
-            }
-        }
-        if (!missingArguments.isEmpty()) {
-            throw new IllegalArgumentException("Missing mandatory agent arguments: " + String.join(", ", missingArguments));
-        }
+        checkMissingArgs(arguments);
 
+        return arguments;
+    }
+
+    private static AgentConfiguration createAgentConfiguration(Map<String, List<String>> arguments) {
         final String bridgePath = singleValue(arguments, "BridgePath");
         final String host = singleValue(arguments, "host");
         final String portValue = singleValue(arguments, "port");
@@ -53,6 +53,19 @@ public final class AgentArgumentsResolver {
         }
 
         return new AgentConfiguration(bridgePath, arguments.get("TraceTarget"), host, port);
+    }
+
+    private static void checkMissingArgs(Map<String, List<String>> arguments) {
+        final List<String> missingArguments = new ArrayList<>();
+        for (String name : MANDATORY_ARGUMENTS) {
+            final List<String> values = arguments.get(name);
+            if (values == null || values.stream().anyMatch(String::isBlank)) {
+                missingArguments.add(name);
+            }
+        }
+        if (!missingArguments.isEmpty()) {
+            throw new IllegalArgumentException("Missing mandatory agent arguments: " + String.join(", ", missingArguments));
+        }
     }
 
     private static String singleValue(Map<String, List<String>> arguments, String name) {
