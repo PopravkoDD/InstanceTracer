@@ -80,7 +80,11 @@ No artifact copying, production packaging, or distribution is implemented.
    standard before-launch tasks, console integration, debugger, working directory,
    environment, and process lifecycle. Configuration validation failures are
    reported instead of silently launching without the agent. No `ProcessBuilder`
-   is used. Runtime configuration warnings are treated as launch failures and can
+   is used. Already starting runners, active nonparallel instances of the selected
+   configuration, and incompatible running configurations are rejected with an
+   actionable message. Stop conflicting runs in the IDE before launching tracking;
+   tracking does not automatically restart or terminate them.
+   Runtime configuration warnings are treated as launch failures and can
    be corrected in the normal Run Configuration editor.
 8. On the matching execution's `ExecutionListener.processStarted`, the copied VM
    options are restored and the existing EventManager receives

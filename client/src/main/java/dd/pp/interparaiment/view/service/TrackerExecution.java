@@ -8,6 +8,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.intellij.execution.ExecutionListener;
 import com.intellij.execution.ExecutionManager;
 import com.intellij.execution.CommonJavaRunConfigurationParameters;
+import com.intellij.execution.ExecutionException;
+import com.intellij.execution.configuration.CompatibilityAwareRunProfile;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.openapi.Disposable;
@@ -132,6 +134,7 @@ public final class TrackerExecution implements Disposable {
         }
         try {
             // This profile is an unregistered deep copy, never the RunManager's stored configuration.
+            ensureExecutionAllowed();
             injectVmOption(option);
             environment.getRunnerAndConfigurationSettings().checkSettings(environment.getExecutor());
             if (environment.getState() == null) {
@@ -143,6 +146,26 @@ public final class TrackerExecution implements Disposable {
         } catch (com.intellij.execution.ExecutionException
                  | com.intellij.execution.configurations.RuntimeConfigurationException e) {
             fail(e.getMessage());
+        }
+    }
+
+    private void ensureExecutionAllowed() throws ExecutionException {
+        ExecutionManager manager = ExecutionManager.getInstance(project);
+        if (manager.isStarting(environment)) {
+            throw new ExecutionException("The IDE is already preparing an execution with this runner. Wait for it to start and retry.");
+        }
+        var settings = environment.getRunnerAndConfigurationSettings();
+        var configuration = settings.getConfiguration();
+        boolean conflict = !manager.getRunningDescriptors(running -> {
+            if (!configuration.isAllowRunningInParallel() && settings.getUniqueID().equals(running.getUniqueID())) {
+                return true;
+            }
+            return running.getConfiguration() instanceof CompatibilityAwareRunProfile compatible
+                    && compatible.mustBeStoppedToRun(configuration);
+        }).isEmpty();
+        if (conflict) {
+            throw new ExecutionException("A running configuration conflicts with this tracking launch. "
+                    + "Stop it in the Run/Debug tool window, or enable parallel execution where appropriate, and retry.");
         }
     }
 
