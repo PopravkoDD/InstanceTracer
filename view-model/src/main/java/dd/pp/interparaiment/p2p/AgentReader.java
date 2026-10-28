@@ -6,45 +6,91 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import dd.pp.interparaiment.InspectorConfiguration;
 import dd.pp.interparaiment.ReadingWorker;
 import dd.pp.interparaiment.event.EventManager;
 import dd.pp.interparaiment.event.requests.ShowMessageInConsoleRequest;
 
-public class AgentReader {
-    private static final String host = "127.0.0.1";
-    private static final int port = 35824;
-
+public class AgentReader implements AutoCloseable {
     private final EventManager eventManager;
     private final ReadingWorker worker;
     private final ServerSocket serverSocket;
     private final DataResolvingWorker dataResolver;
     private Socket socket;
     private DataInputStream in;
+    private final AtomicBoolean closed = new AtomicBoolean();
+    private boolean started;
+    private volatile boolean targetTerminated;
 
-    public AgentReader(final EventManager eventManager, final DataResolvingWorker dataResolver) throws IOException {
+    public AgentReader(final EventManager eventManager, final DataResolvingWorker dataResolver,
+                       final InspectorConfiguration snapshot) throws IOException {
         this.eventManager = eventManager;
         this.dataResolver = dataResolver;
-        this.serverSocket = new ServerSocket(port, 1, InetAddress.getByName(host));
-        this.serverSocket.setSoTimeout(10000);
-        this.worker = new ReadingWorker(this::run, eventManager);
+        this.serverSocket = new ServerSocket(snapshot.port(), 1, InetAddress.getByName(snapshot.host()));
+        this.serverSocket.setSoTimeout(250);
+        this.worker = new ReadingWorker(this::run, eventManager, this::close);
     }
 
-    public void open() throws IOException {
+    public synchronized void open() throws IOException {
+        if (closed.get()) {
+            throw new IOException("Receiver is closed");
+        }
+        if (started) {
+            return;
+        }
+        started = true;
+        worker.start();
+    }
+
+    private void accept() throws IOException {
         this.eventManager.notify(new ShowMessageInConsoleRequest("Opening connection..."));
-        this.socket = this.serverSocket.accept();
+        Socket accepted = awaitConnection();
+        synchronized (this) {
+            if (closed.get()) {
+                accepted.close();
+                return;
+            }
+            this.socket = accepted;
+        }
         this.eventManager.notify(new ShowMessageInConsoleRequest("Connection opened, starting reading worker!"));
 
         this.socket.setTcpNoDelay(true);
         this.socket.setKeepAlive(true);
 
         this.in = new DataInputStream(new BufferedInputStream(this.socket.getInputStream()));
+    }
 
-        this.worker.start();
-        this.dataResolver.start();
+    private Socket awaitConnection() throws IOException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        while (true) {
+            try {
+                return serverSocket.accept();
+            } catch (SocketTimeoutException e) {
+                if (targetTerminated) {
+                    throw new IOException("The target exited before the agent connected");
+                }
+                if (System.nanoTime() >= deadline) {
+                    throw new SocketTimeoutException("The agent did not connect within 30 seconds");
+                }
+            }
+        }
+    }
+
+    public void targetTerminated() {
+        targetTerminated = true;
     }
 
     public void run() throws IOException {
+        if (in == null) {
+            accept();
+        }
+        if (closed.get()) {
+            return;
+        }
         int length = in.readInt();
         if (length <= 0 || length > 50_000_000) {
             throw new IOException("Invalid frame length: " + length);
@@ -54,5 +100,29 @@ public class AgentReader {
         in.readFully(payload);
 
         dataResolver.emmit(payload);
+    }
+
+    public boolean isClosed() {
+        return closed.get();
+    }
+
+    @Override
+    public synchronized void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
+        worker.close();
+        try {
+            serverSocket.close();
+        } catch (IOException e) {
+            eventManager.notify(new ShowMessageInConsoleRequest("Cannot close listener: " + e.getMessage()));
+        }
+        try {
+            if (socket != null) {
+                socket.close();
+            }
+        } catch (IOException e) {
+            eventManager.notify(new ShowMessageInConsoleRequest("Cannot close connection: " + e.getMessage()));
+        }
     }
 }

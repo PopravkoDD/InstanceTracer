@@ -115,7 +115,7 @@ public class InstanceTrackerPanel extends JBPanel {
         final ActionToolbar toolbar = ActionManager.getInstance()
                 .createActionToolbar("TrackerToolbar", group, true);
 
-        toolbar.setTargetComponent(null);
+        toolbar.setTargetComponent(this);
         return toolbar.getComponent();
     }
 }

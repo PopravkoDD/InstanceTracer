@@ -31,3 +31,20 @@ Do not launch IntelliJ or functionally test the client unless explicitly request
 Record each command and outcome. Distinguish compilation failures, dependency/environment failures, test failures, checks not run, and runtime behavior not verified. Do not silently disable validation to obtain a green result.
 
 Attempt in-scope repairs. Push the task branch even when the build remains failed or blocked, with an explicit report. If push itself fails, preserve the commit and report the actual publication status.
+
+## Verified build configuration
+
+The root Maven reactor includes hooks, agent, common, and view-model. There is no
+Maven wrapper. Use `mvn -B clean install` at the root, then the client Gradle
+wrapper (`bash ./gradlew compileJava` from `client`) for compilation. The committed
+wrapper uses Gradle 8.4; the plugin targets IDEA Community 2023.3.6 with Java plugin
+support, Java 17 source/target, and Gradle IntelliJ Plugin 1.16.1. Use a JDK, not a
+JRE, for these builds. The client resolves view-model 1.0 from `mavenLocal()`;
+ensure both tools use the same local Maven repository if overriding it.
+
+Inspect `bash ./gradlew buildPlugin --dry-run` before packaging. SDK resolution can
+occur during Gradle configuration even for a dry run, including evaluation of
+the `runIde` task's properties; this does not mean an IDE was launched. SDK
+downloads through the JetBrains cache can redirect to the upstream JetBrains
+repository, which must also be reachable under the build environment's network
+policy.

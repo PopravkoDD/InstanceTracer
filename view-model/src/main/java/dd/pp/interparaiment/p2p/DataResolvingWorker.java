@@ -17,6 +17,8 @@ public class DataResolvingWorker extends Thread {
 
     public DataResolvingWorker(final InspectorViewModel viewModel) {
         this.viewModel = viewModel;
+        setName("InstanceTracer data resolver");
+        setDaemon(true);
     }
 
     @Override
@@ -27,7 +29,7 @@ public class DataResolvingWorker extends Thread {
                 handleRaw(payload);
             }
         } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            Thread.currentThread().interrupt();
         }
     }
 

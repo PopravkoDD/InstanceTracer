@@ -29,3 +29,12 @@ not verify that the hooks JAR exists or that the receiver is reachable.
 
 The separate legacy `FxListeningAgent` is not the packaged entry point and retains
 its existing argument handling.
+
+## IntelliJ client responsibilities
+
+`InspectorViewModel.getAgentArgs()` formats repeated `TraceTarget`, `host`, and
+`port` from one immutable receiver configuration. The client resolves both JAR
+paths, supplies `BridgePath`, and wraps these arguments in a temporary
+`-javaagent` JVM option. It does not format receiver options independently.
+See [tracking lifecycle](lifecycle.md) for project persistence, development artifact
+resolution, supported Run/Debug configurations, and receiver startup ordering.
