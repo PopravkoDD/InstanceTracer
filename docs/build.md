@@ -37,7 +37,7 @@ Attempt in-scope repairs. Push the task branch even when the build remains faile
 The root Maven reactor includes hooks, agent, common, and view-model. There is no
 Maven wrapper. Use `mvn -B clean install` at the root, then the client Gradle
 wrapper (`bash ./gradlew compileJava` from `client`) for compilation. The committed
-wrapper uses Gradle 8.4; the plugin targets IDEA Community 2023.3.6 with Java plugin
+wrapper uses Gradle 8.4; the plugin targets IDEA Community 2023.3.6 with bundled Java and Gradle plugin
 support, Java 17 source/target, and Gradle IntelliJ Plugin 1.16.1. Use a JDK, not a
 JRE, for these builds. The client resolves view-model 1.0 from `mavenLocal()`;
 ensure both tools use the same local Maven repository if overriding it.
@@ -48,3 +48,24 @@ the `runIde` task's properties; this does not mean an IDE was launched. SDK
 downloads through the JetBrains cache can redirect to the upstream JetBrains
 repository, which must also be reachable under the build environment's network
 policy.
+
+
+## Development resolver and packaging
+
+Before building a development plugin for use, set `development.project.root` in
+`client/src/main/resources/dd/pp/interparaiment/view/service/dev-java-agent.properties`.
+Leave developer-specific absolute paths out of Java sources and version control.
+The supplied empty value produces an actionable launch/tool-window error until
+configured; it does not prevent compilation. Both JARs must have been built with
+Maven clean install before running an inspection.
+
+For packaging under the repository's build-only validation rule, use:
+
+    bash ./gradlew buildPlugin -x buildSearchableOptions
+
+The Gradle IntelliJ Plugin's buildPlugin task depends on prepareSandbox (file
+preparation/packaging, not launching an IDE) and jarSearchableOptions. Its
+buildSearchableOptions dependency launches an IDE to collect a searchable
+settings index, so exclude that task when IDE execution is not authorized. This
+omits the generated settings-search index, not Java compilation or plugin
+packaging. Do not run runIde, UI tests, or a target JVM as build validation.

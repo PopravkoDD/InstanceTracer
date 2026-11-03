@@ -1,122 +1,225 @@
-# Tracking configuration and execution
+# MessInspection execution and recording
 
-## Initialization and persistence
+## Configuration ownership
 
-`TracingService` is a project service. Its constructor first requests
-`TrackerSettingsService`, whose `PersistentStateComponent` state is loaded by the
-IntelliJ platform before the service is returned. It then constructs
-`InspectorViewModel` with the restored immutable `InspectorConfiguration` and
-subscribes to `AgentConfigurationChangedEvent`. Restoring settings emits no event.
+| Owner | Settings |
+| --- | --- |
+| `MessInspectionConfiguration` | Embedded native Application or Gradle settings; inspection host and port |
+| `TrackerConfigurationDialog` | TraceTargets only, with the existing PSI completion and All Places chooser |
+| `TrackerSettingsService` / `ClientConfiguration` | Project trace target persistence and the `recordOnStart` preference |
+| `DevJavaAgentResolver` | Build-time development artifact location, read from its properties resource |
+| `InspectorConfiguration` | Immutable resolved snapshot: host, port, targets, agentPath, bridgePath |
 
-`TrackerSettingsService` stores host, port, trace targets, Debug mode, and the
-optional development project root in the project's workspace storage
-(`.idea/workspace.xml`, component `InstanceTracerSettings`). Missing settings use
-`127.0.0.1`, port `35824`, no targets, Run mode, and automatic development root
-discovery. Invalid persisted receiver settings produce an IDE log warning and
-fall back to defaults. An invalid persisted development root falls back to
-discovery without resetting Debug mode.
+Create a **MessInspection** configuration through the standard IntelliJ Run/Debug
+configuration UI. Select Application or Gradle, configure its native editor, then
+set the inspection host and port. Choose Run or Debug with the normal IDE executor
+controls; the former client Debug mode preference is no longer a second executor
+selector. Host defaults to `127.0.0.1` and port to `35824`.
 
-The configuration dialog edits private copies. OK validates both configurations
-before applying them; Cancel leaves active settings untouched. ViewModel updates
-publish `AgentConfigurationChangedEvent` through the existing `EventManager` only
-when normalized options differ. Its subscriber updates persisted receiver state.
-Client options are saved separately and publish no agent configuration event.
-There is no settings-to-ViewModel feedback loop. External live edits to workspace
-XML are not a supported way to update an already initialized ViewModel.
+The embedded native profile is owned by MessInspection, not a reference to another
+saved configuration. Its native `SettingsEditor` handles application/Gradle fields,
+and native `readExternal`/`writeExternal` persist them inside the MessInspection
+configuration. Before-launch tasks and console/log settings are delegated to that
+profile and persisted through IntelliJ's regular Run Configuration mechanism.
+Only editor/template transactions use `clone()` to isolate drafts. Executing a
+configuration creates no Run Configuration copies and does not modify stored VM
+parameters or unrelated configurations.
 
-Trace targets use PSI reference fragments for completion and the platform class
-chooser with `GlobalSearchScope.allScope(project)` (All Places, including library
-classes). Adding, editing, and removing entries affects only the dialog's list.
-Resolved classes are saved as JVM-qualified names (`$` for nested classes) for the
-agent's exact class-name matcher. Syntactically valid unresolved names are kept,
-including while indexing. Invalid names are rejected. Target order and duplicates
-do not change the effective configuration.
+Set **Record automatically when an inspection connects** in **Settings | Tools |
+InstanceTracer**. The default is false. This preference is captured for the next
+execution; changing it does not toggle an already connected session.
+`TrackerSettingsService` uses `PersistentStateComponent` with workspace storage
+(`.idea/workspace.xml`, component `InstanceTracerSettings`) for this option and
+TraceTargets. Host and port now belong to each MessInspection Run Configuration,
+not project settings. Old TraceTargets remain loadable; obsolete project host,
+port, Debug mode and development-root fields are not retained in new state.
+
+`TracingService` obtains restored settings and resolves artifacts before creating
+`InspectorConfiguration` and `InspectorViewModel`. Initialization publishes no
+configuration-change event. Later trace edits call ViewModel's atomic
+`updateTraceTargets`, which merges with current execution options and delegates
+to `updateOptions`. Only effective changes publish `AgentConfigurationChangedEvent`;
+its existing settings subscriber saves trace targets. Client preferences are
+saved independently without that event. Neither settings UI writes during editing
+or Cancel. No feedback loop from settings into an already initialized ViewModel
+is introduced.
 
 ## Development artifacts
 
-The project service `IJavaAgentResolver` returns `AgentArtifacts(agent, hooks)`.
-Only `DevJavaAgentResolver` is installed. With an explicit development root it
-uses that directory (relative paths are resolved against the open project's
-base directory). Otherwise it walks the open project's ancestors until it finds
-the root, agent, and hooks POMs. It does not search unrelated directories or fall
-back to another version of an artifact.
-
-The resolver requires readable regular files at:
+Edit this classpath resource **before building the development plugin**:
 
 ```text
-<development-root>/agent/target/agent-1.0.jar
-<development-root>/hooks/target/hooks-1.0.jar
+client/src/main/resources/dd/pp/interparaiment/view/service/dev-java-agent.properties
 ```
 
-Build these with Maven `clean install` at the development root. When tracing a
-different project, specify the InstanceTracer checkout in Configure Tracking.
-No artifact copying, production packaging, or distribution is implemented.
+Set `development.project.root` to the InstanceTracer checkout. The committed value
+is empty deliberately; no developer-specific path is committed. Prefer an
+absolute path. Relative values retain the earlier resolver's project-base
+resolution semantics. Use forward slashes on Windows, or escape backslashes using
+Java Properties syntax.
 
-## Launch
+`DevJavaAgentResolver` loads the resource during service initialization and keeps
+the configured value for that service's lifetime. `resolve()` validates it and
+returns the existing `AgentArtifacts(agent, hooks)` structure, requiring readable
+regular files at exactly:
 
-1. `TrackerStartAction` reads `RunManager.getInstance(project).getSelectedConfiguration()`,
-   the selection used by the main Run/Debug toolbar. It does not maintain a
-   separate or last-used selection. Missing selections fail with an explanation.
-2. It selects `DefaultRunExecutor` or `DefaultDebugExecutor` from current client
-   settings, honoring the original configuration's edit-before-run preference
-   before injection. It validates the resulting selection again.
-3. It captures the immutable options and calls `InspectorViewModel.getAgentArgs()`
-   under the same monitor. The agent requires at least one target, so the empty
-   default configuration can be saved but cannot be launched.
-4. `RunnerAndConfigurationSettingsImpl.clone()` copies the configuration and
-   runner-specific settings. The copy is never added to RunManager. The
-   environment is built with the current execution target and action data context.
-5. `TrackerExecution` resolves artifacts and prepares the ViewModel listener on a
-   pooled thread, using the captured receiver configuration. Failure stops this
-   launch without closing another launch's receiver. The agent is the TCP client;
-   binding before process creation avoids its initial connection race without
-   changing the agent or reversing the protocol.
-6. The client adds `BridgePath` and the `-javaagent` wrapper to the fresh ViewModel
-   arguments. IntelliJ's `ParametersListUtil` preserves the existing logical VM
-   options and quotes the additional option, including paths containing spaces.
-   Commas in the hooks path and `=` in the agent path are rejected because the
-   documented argument/JVM syntax cannot represent them safely.
-7. The selected standard `ProgramRunner` executes the environment. This retains
-   standard before-launch tasks, console integration, debugger, working directory,
-   environment, and process lifecycle. Configuration validation failures are
-   reported instead of silently launching without the agent. No `ProcessBuilder`
-   is used. Already starting runners, active nonparallel instances of the selected
-   configuration, and incompatible running configurations are rejected with an
-   actionable message. Stop conflicting runs in the IDE before launching tracking;
-   tracking does not automatically restart or terminate them.
-   Runtime configuration warnings are treated as launch failures and can
-   be corrected in the normal Run Configuration editor.
-8. On the matching execution's `ExecutionListener.processStarted`, the copied VM
-   options are restored and the existing EventManager receives
-   `StartInspectionRequest` with the prepared receiver's ownership token. The
-   `ReadingWorker` accepts and reads in the background; there are no blocking
-   accept/connect operations on the IDE event thread. The accept timeout is
-   30 seconds from reader startup, not from the start of before-launch tasks.
+```text
+<configured-root>/agent/target/agent-1.0.jar
+<configured-root>/hooks/target/hooks-1.0.jar
+```
 
-Startup failure closes the owned listener and resets action state. Lifecycle
-subscriptions are scoped to that execution ID and disposed on failure, stop,
-termination, or project disposal. Stop disconnects communication without killing
-the target JVM. Normal target termination lets the reader consume buffered frames
-through EOF. If the agent never connected, a 250 ms accept poll lets the reader
-notice target termination and close the listener; a pending connection is still accepted and
-drained. The data resolver is started once per ViewModel and retained across
-connections; project disposal stops it. The original no-argument
-`StartInspectionRequest` still prepares and starts a reader asynchronously.
+Missing resource/property, invalid directories, invalid paths, and missing JARs
+produce actionable diagnostics. There is no fallback to unrelated directories or
+artifact versions. Build artifacts with Maven `clean install` in that checkout.
+`TracingService.resolveConfiguration` uses this same resolver before constructing
+any resolved inspection snapshot. Paths are not client settings and are not
+serialized into project or Run Configuration settings. No copying or production
+artifact distribution is added. An unconfigured development build reports the
+resource problem in the tool window or launch error instead of creating a
+ViewModel with fake/unresolved paths.
 
-## Supported executions and limits
+## Run/Debug integration
 
-Only the platform's local Java **Application** and **JAR Application** types are
-supported. Subclasses supplied by other plugins, compound configurations, test
-runners, Maven/Gradle configurations, remote targets, and WSL execution are rejected
-explicitly. Build-tool configurations may launch multiple JVMs and do not expose
-the target JVM's options through these APIs; adding support requires a dedicated
-adapter. The settings-copy implementation is tied to the pinned IntelliJ SDK and
-must be checked when upgrading it.
+`MessInspectionConfigurationType` and its factory register the independently
+persisted type. Its native-editor delegate changes with the selected underlying
+type. Four small runner adapters correspond to Application Run/Debug and Gradle
+Run/Debug. They retain MessInspection as the execution profile, including console
+reruns. Application adapters inherit the native Java Run/Debug implementations;
+Gradle Debug inherits the native external-system debugger, and Gradle Run delegates
+to the native runner because its implementation is final. There is no custom
+process launcher or `ProcessBuilder`.
 
-One receiver can be prepared/running per ViewModel. Two projects cannot bind the
-same host/port simultaneously. Changes made during a launch apply to subsequent
-launches; the current launch retains its captured options. A running target keeps
-its agent even after communication is stopped. The existing bounded data queue's
-overflow policy is unchanged. No end-to-end runtime or performance claims follow
-from compilation; IDE and target-process functional validation require a separate
-explicit assignment under the repository's validation rules.
+The adapted `TrackerExecution` now handles execution ownership only:
+
+1. Capture execution options and `recordOnStart`.
+2. Resolve both artifacts and construct the immutable snapshot on a pooled thread.
+3. Request the complete `-javaagent` option from ViewModel.
+4. Reserve/bind a receiver through `prepareInspection(snapshot, recordOnStart)`.
+5. Install options into execution-local state and send the existing scoped
+   `StartInspectionRequest`. The reader starts accepting in the background before
+   the target is created, avoiding the agent's initial connection race.
+6. Invoke the native runner, retaining its before-launch tasks, console, debugger,
+   execution errors, and cancellation handling.
+7. On the matching environment's `processNotStarted`/`processTerminated`, or project
+   disposal, close the owned session and remove lifecycle subscriptions/state.
+
+Because Gradle can build for some time before JavaExec starts, the bound listener
+has no arbitrary pre-connection timeout. It is owned by the pending execution and
+closed on execution failure, cancellation, completion, or project disposal.
+
+Application uses a thin native `JavaApplicationCommandLineState` subclass to add
+the option to freshly created `JavaParameters`, not to the configuration's VM
+settings. The complete argument is one parameter, including paths with spaces.
+For Gradle, `GradleTaskManager.INIT_SCRIPT_KEY` is set only on the execution's
+`ExternalSystemRunnableState`. The native plugin carries this init script into
+its build execution. It checks the exact requested task in the execution graph,
+requires `JavaExec`, and appends the option only to that task's JVM arguments in
+`doFirst`. Gradle daemon VM options are not changed. Other JavaExec tasks in the
+dependency graph receive no inspection agent from this script.
+
+IntelliJ's `ExecutionEnvironment.getState()` constructs state rather than caching
+it. MessInspection therefore holds prepared state in environment user data for
+one execution. Every launch/rerun resets that state and option; cleanup removes
+only its owner's data. Repeated state lookups reuse the prepared Gradle init
+script and cannot silently lose it. Argument insertion is idempotent within the
+execution, and persisted settings never accumulate `-javaagent` options.
+
+Gradle support is intentionally limited: one exact JavaExec/application-run task
+(such as `:run` or `:app:run`), with native task options such as `--args` preserved.
+The configuration rejects test mode, Gradle script/daemon debugging, continuous
+execution, dry-run, and configuration-cache mode. The init script also rejects
+configuration cache enabled through Gradle properties and non-JavaExec or excluded
+requested tasks before launching a target application. Remote targets and WSL
+preparation are unsupported. Only Run and Debug are adapted, not Coverage or
+profiling executors. The bundled Gradle plugin is the only new plugin dependency.
+
+## Recording lifecycle
+
+Launching a JVM is separate from starting/stopping recording. Renamed
+`StartRecordingTrackerAction` and `StopRecordingTrackerAction` never execute or
+terminate a process and never clear the collected `MessModel`.
+
+`ReadingWorker` starts as part of receiver startup and continuously consumes the
+framed TCP stream after connection. At connection readiness, `recordOnStart=true`
+starts the resolver before the first payload is forwarded and initializes
+`isReadingMuted=false`. With false, reading is muted and the resolver is initially
+inactive (its Thread is not started). Muting consumes complete payloads without
+allocating/decoding a payload for the recording pipeline.
+
+StartRecording obtains the active project inspection, starts/resumes its existing
+resolver first, then publishes `RecordingStartedEvent(inspection)` through the
+existing EventManager. ReadingWorker's matching subscriber only assigns
+`isReadingMuted=false`. Repeated starts cannot create another thread.
+
+StopRecording closes admission synchronously and publishes
+`RecordingStoppedEvent(inspection)`; its matching subscriber only assigns
+`isReadingMuted=true`. Neither event subscriber manages a queue, starts/stops
+workers, emits more events, or changes models. Identity checks route events only
+to the owning reader, and closing a reader unsubscribes its listeners.
+
+Admission is accounted for after the first header byte arrives and before reading
+the remaining header/payload. Stop therefore includes partially read admitted
+frames without waiting for an idle socket. An admission permit spans framing,
+payload reading and enqueueing; the resolver separately counts queued plus
+currently processing messages. Already admitted frames may finish enqueueing
+after the stop request. New frames are still consumed but not admitted. Drain
+completion requires both counters to reach zero, not merely an empty queue.
+Failures of the last active message complete the drain exceptionally, not as a
+successful stop.
+
+The resolver drains admitted work and changes `DRAINING -> PAUSED`. A started
+worker waits on a monitor while idle/paused; StartRecording resumes that same
+thread. Resume during DRAINING is rejected and the Start action remains disabled
+until draining finishes. No busy loop, thread restart, queue clear, model reset,
+or EDT join/wait is used. A slow/incomplete admitted frame can delay drain
+completion until it finishes or the connection closes, without blocking the IDE.
+The original bounded queue capacity and overflow policy remain; saturation can
+still drop frames and now reports overload in the console. Muted frames are
+intentionally discarded by the requested recording policy, not buffered for later
+recording. No loss-free overload guarantee is claimed.
+
+Execution termination is different: `ExecutionListener.processTerminated` closes
+ReadingWorker and its sockets immediately. Admitted/queued processing drains
+asynchronously, then the session resolver terminates. EOF/communication failure
+uses the same idempotent session cleanup. StopRecording only pauses/drains; it
+does not close the reader or end the inspection. Previously collected data is
+retained through recording cycles and remains in the existing project ViewModel
+when an inspection ends, preserving the earlier model ownership.
+
+## PreparedInspection and session limits
+
+Previously `PreparedInspection` held the prepared AgentReader and prevented a
+failed/stale launch from closing another reader. It did not store a Run
+Configuration or select one. Its ownership purpose is retained: it now owns that
+listener/reader plus the session's DataResolvingWorker, connection state, and
+recording transitions. It is not a second launcher or a process handle.
+
+Its complete lifecycle is:
+
+1. ViewModel reserves its existing preparation slot under a short lock and version.
+2. The receiver is bound outside the ViewModel lock; a cancellation/disposal during
+   binding closes the new token rather than publishing a stale session.
+3. The token is installed as the project's current inspection and is carried by
+   StartInspectionRequest and the execution owner's callbacks.
+4. Connection readiness makes it active and optionally starts automatic recording.
+5. Recording actions refer to this token; pause/resume does not replace it.
+6. Process failure/end, EOF, or disposal closes it once, removes reader event
+   subscriptions, closes communication, and drains/terminates its resolver.
+7. Only when that resolver finishes is the ViewModel slot cleared, guarded by
+   token identity so late cleanup cannot clear a different session.
+
+The project ViewModel still has one `inspection` slot, one preparation reservation,
+one EventManager and one collected model. **Simultaneous independent sessions in
+the same project are not supported**, and a new launch is rejected while its
+previous session is draining. Different projects have separate services/tokens
+and may inspect concurrently with distinct host/port bindings. No application-wide
+session registry or multi-session redesign is added. Supporting multiple sessions
+in one project needs explicit model/session selection and ownership work later.
+Trace-target changes affect future JVM launches; recording toggles do not
+re-instrument an already running agent. Changing the underlying type during
+preparation, or rerunning an old console after changing its type, fails with an
+instruction to launch again from the toolbar.
+
+Runtime/IDE integration, actual settings restoration, and debugger behavior remain
+subject to future functional validation. Build results alone do not establish
+the runtime scenarios above; this task permits only build validation.

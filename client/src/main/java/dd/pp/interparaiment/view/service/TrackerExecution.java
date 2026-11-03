@@ -1,76 +1,62 @@
 package dd.pp.interparaiment.view.service;
 
 import java.io.IOException;
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
-
+import com.intellij.execution.ExecutionException;
 import com.intellij.execution.ExecutionListener;
 import com.intellij.execution.ExecutionManager;
-import com.intellij.execution.CommonJavaRunConfigurationParameters;
-import com.intellij.execution.ExecutionException;
-import com.intellij.execution.configuration.CompatibilityAwareRunProfile;
+import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.Disposer;
-import com.intellij.util.execution.ParametersListUtil;
+import com.intellij.openapi.util.Key;
 import com.intellij.util.messages.MessageBusConnection;
+import com.intellij.util.ThrowableRunnable;
 import dd.pp.interparaiment.InspectorConfiguration;
 import dd.pp.interparaiment.InspectorViewModel;
-import dd.pp.interparaiment.event.EventManager;
-import dd.pp.interparaiment.event.IListener;
 import dd.pp.interparaiment.event.requests.ShowMessageInConsoleRequest;
 import dd.pp.interparaiment.event.requests.StartInspectionRequest;
-import dd.pp.interparaiment.event.requests.StopInspectionRequest;
-import dd.pp.interparaiment.view.actions.MessActionsContext;
+import dd.pp.interparaiment.view.run.MessInspectionConfiguration;
+import dd.pp.interparaiment.view.run.MessInspectionExecutionOptions;
 import org.jetbrains.annotations.NotNull;
 
-/** Owns one prepared receiver and the corresponding IDE execution lifecycle. */
+/** Execution ownership only. Recording toggles never finish this lifecycle. */
 public final class TrackerExecution implements Disposable {
+    private static final Key<TrackerExecution> OWNER = Key.create("dd.pp.interparaiment.executionOwner");
     private final Project project;
-    private final InspectorViewModel viewModel;
-    private final MessActionsContext state;
     private final ExecutionEnvironment environment;
-    private final EventManager eventManager;
-    private final String originalVmOptions;
-    private final AtomicBoolean optionInjected = new AtomicBoolean();
-    private volatile long executionId;
-    private final AtomicBoolean finished = new AtomicBoolean();
+    private final MessInspectionConfiguration configuration;
+    private final RunConfiguration expectedPeer;
+    private final ThrowableRunnable<ExecutionException> nativeLaunch;
     private final MessageBusConnection connection;
+    private final AtomicBoolean finished = new AtomicBoolean();
     private volatile InspectorViewModel.PreparedInspection inspection;
-    private final IListener<StopInspectionRequest> stopListener = request -> finish(false);
+    private volatile InspectorViewModel viewModel;
 
-    public TrackerExecution(Project project, InspectorViewModel viewModel, MessActionsContext state,
-                            ExecutionEnvironment environment, EventManager eventManager) {
-        this.project = project;
-        this.viewModel = viewModel;
-        this.state = state;
+    public TrackerExecution(ExecutionEnvironment environment, ThrowableRunnable<ExecutionException> nativeLaunch) {
         this.environment = environment;
-        this.eventManager = eventManager;
-        originalVmOptions = parameters().getVMParameters();
-        Disposer.register(project.getService(TracingService.class), this);
+        this.configuration = (MessInspectionConfiguration) environment.getRunProfile();
+        expectedPeer = configuration.getPeer();
+        this.nativeLaunch = nativeLaunch;
+        configuration.getPeer().setName(configuration.getName());
+        if (environment.getExecutionId() == 0) {
+            environment.assignNewExecutionId();
+        }
+        project = environment.getProject();
         connection = project.getMessageBus().connect(this);
+        Disposer.register(project.getService(TracingService.class), this);
         connection.subscribe(ExecutionManager.EXECUTION_TOPIC, new ExecutionListener() {
-            @Override
-            public void processStarted(@NotNull String executorId, @NotNull ExecutionEnvironment env,
-                                       @NotNull ProcessHandler handler) {
-                if (isOurExecution(env) && !finished.get()) {
-                    restoreVmOptions();
-                    state.setStarting(false);
-                    state.setRunning(true);
-                    eventManager.notify(new StartInspectionRequest(inspection));
-                }
-            }
-
             @Override
             public void processNotStarted(@NotNull String executorId, @NotNull ExecutionEnvironment env) {
                 if (isOurExecution(env)) {
-                    fail("The IDE did not start the target process. Check the Run/Debug console.");
+                    // The native runner reports execution errors and cancellations in the usual IDE UI.
+                    finish();
                 }
             }
 
@@ -78,144 +64,113 @@ public final class TrackerExecution implements Disposable {
             public void processTerminated(@NotNull String executorId, @NotNull ExecutionEnvironment env,
                                           @NotNull ProcessHandler handler, int exitCode) {
                 if (isOurExecution(env)) {
-                    // Let the reader consume buffered frames through EOF before it closes itself.
-                    if (inspection != null) {
-                        inspection.targetTerminated();
-                    }
-                    finish(false);
+                    finish();
                 }
             }
         });
-        eventManager.subscribe(StopInspectionRequest.class, stopListener);
     }
 
     private boolean isOurExecution(ExecutionEnvironment other) {
-        return executionId != 0 && other.getExecutionId() == executionId;
+        return other == environment;
     }
 
-    /** Resolve filesystem artifacts and bind the listener without blocking the IDE thread. */
-    public void prepareAndLaunch(InspectorConfiguration snapshot, String agentArgs,
-                                 ClientConfiguration client, IJavaAgentResolver resolver) {
+    public void prepareAndLaunch() {
+        // Capture editable execution settings and the recording preference before asynchronous preparation.
+        String host = configuration.getHost();
+        int port = configuration.getPort();
+        boolean recordOnStart = project.getService(TrackerSettingsService.class).getClientConfiguration().recordOnStart();
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
-                IJavaAgentResolver.AgentArtifacts artifacts = resolver.resolve(client);
-                String option = javaAgentOption(artifacts, agentArgs);
+                TracingService tracing = project.getService(TracingService.class);
+                InspectorConfiguration snapshot = tracing.resolveConfiguration(host, port);
+                viewModel = tracing.getViewModel(snapshot);
+                String option = viewModel.getAgentArgs(snapshot);
                 if (finished.get()) {
                     return;
                 }
-                inspection = viewModel.prepareInspection(snapshot);
+                inspection = viewModel.prepareInspection(snapshot, recordOnStart);
                 if (finished.get()) {
                     inspection.close();
                     return;
                 }
-                ApplicationManager.getApplication().invokeLater(() -> launch(option), ModalityState.nonModal());
-            } catch (IOException | IllegalArgumentException e) {
+                synchronized (viewModel) {
+                    // A launch snapshot must not overwrite targets edited while it was being prepared.
+                    viewModel.updateOptions(snapshot.withTraceTargets(viewModel.getConfiguration().traceTargets()));
+                }
+                synchronized (environment) {
+                    if (finished.get()) {
+                        inspection.close();
+                        return;
+                    }
+                    environment.putUserData(OWNER, this);
+                    MessInspectionExecutionOptions.apply(environment, option);
+                }
+                viewModel.getEventManager().notify(new StartInspectionRequest(inspection));
+                ApplicationManager.getApplication().invokeLater(this::launch, ModalityState.nonModal());
+            } catch (ProcessCanceledException e) {
+                finish();
+            } catch (IOException | ExecutionException | RuntimeException e) {
                 fail(e.getMessage());
             }
         });
     }
 
-    private static String javaAgentOption(IJavaAgentResolver.AgentArtifacts artifacts, String agentArgs) {
-        Path agent = artifacts.agent();
-        String hooks = artifacts.hooks().toString();
-        if (agent.toString().contains("=") || agent.toString().chars().anyMatch(Character::isISOControl)) {
-            throw new IllegalArgumentException("The agent JAR path contains characters unsupported by -javaagent: " + agent);
-        }
-        if (hooks.contains(",") || hooks.chars().anyMatch(Character::isISOControl)) {
-            throw new IllegalArgumentException("The hooks JAR path contains characters unsupported by the agent arguments: " + hooks);
-        }
-        return "-javaagent:" + agent + "=BridgePath=" + hooks + "," + agentArgs;
-    }
-
-    private void launch(String option) {
-        if (project.isDisposed() || finished.get()) {
-            finish(true);
+    private void launch() {
+        if (finished.get() || project.isDisposed()) {
+            finish();
             return;
         }
         try {
-            // This profile is an unregistered deep copy, never the RunManager's stored configuration.
-            ensureExecutionAllowed();
-            injectVmOption(option);
-            environment.getRunnerAndConfigurationSettings().checkSettings(environment.getExecutor());
-            if (environment.getState() == null) {
-                throw new com.intellij.execution.ExecutionException("The selected configuration did not provide an executable state");
+            if (expectedPeer != configuration.getPeer()
+                    || !environment.getRunner().canRun(environment.getExecutor().getId(), configuration)) {
+                throw new ExecutionException("The underlying configuration type changed; launch MessInspection again from the toolbar");
             }
-            environment.assignNewExecutionId();
-            executionId = environment.getExecutionId();
-            environment.getRunner().execute(environment);
-        } catch (com.intellij.execution.ExecutionException
-                 | com.intellij.execution.configurations.RuntimeConfigurationException e) {
+            if (environment.getState() == null) {
+                throw new ExecutionException("The underlying configuration has no executable state");
+            }
+            nativeLaunch.run();
+        } catch (ProcessCanceledException e) {
+            finish();
+        } catch (ExecutionException | RuntimeException e) {
             fail(e.getMessage());
         }
     }
 
-    private void ensureExecutionAllowed() throws ExecutionException {
-        ExecutionManager manager = ExecutionManager.getInstance(project);
-        if (manager.isStarting(environment)) {
-            throw new ExecutionException("The IDE is already preparing an execution with this runner. Wait for it to start and retry.");
-        }
-        var settings = environment.getRunnerAndConfigurationSettings();
-        var configuration = settings.getConfiguration();
-        boolean conflict = !manager.getRunningDescriptors(running -> {
-            if (!configuration.isAllowRunningInParallel() && settings.getUniqueID().equals(running.getUniqueID())) {
-                return true;
-            }
-            return running.getConfiguration() instanceof CompatibilityAwareRunProfile compatible
-                    && compatible.mustBeStoppedToRun(configuration);
-        }).isEmpty();
-        if (conflict) {
-            throw new ExecutionException("A running configuration conflicts with this tracking launch. "
-                    + "Stop it in the Run/Debug tool window, or enable parallel execution where appropriate, and retry.");
-        }
-    }
-
-    private CommonJavaRunConfigurationParameters parameters() {
-        return (CommonJavaRunConfigurationParameters) environment.getRunProfile();
-    }
-
-    private void injectVmOption(String option) {
-        var options = new ArrayList<>(ParametersListUtil.parse(originalVmOptions == null ? "" : originalVmOptions));
-        options.add(option);
-        parameters().setVMParameters(ParametersListUtil.join(options));
-        optionInjected.set(true);
-    }
-
-    private void restoreVmOptions() {
-        if (optionInjected.compareAndSet(true, false)) {
-            parameters().setVMParameters(originalVmOptions);
-        }
-    }
-
     private void fail(String message) {
-        String diagnostic = message == null ? "The IDE could not launch tracking" : message;
-        if (finish(true)) {
-            eventManager.notify(new ShowMessageInConsoleRequest("Tracking launch failed: " + diagnostic));
+        if (finish()) {
+            String diagnostic = message == null ? "MessInspection launch failed" : message;
+            if (viewModel != null) {
+                viewModel.getEventManager().notify(new ShowMessageInConsoleRequest(diagnostic));
+            }
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (!project.isDisposed()) {
-                    Messages.showErrorDialog(project, diagnostic, "InstanceTracer");
+                    Messages.showErrorDialog(project, diagnostic, "MessInspection");
                 }
             }, ModalityState.nonModal());
         }
     }
 
-    private boolean finish(boolean stopReader) {
-        if (!closeResources(stopReader)) {
+    private boolean finish() {
+        if (!closeResources()) {
             return false;
         }
         Disposer.dispose(this);
         return true;
     }
 
-    private boolean closeResources(boolean stopReader) {
+    private boolean closeResources() {
         if (!finished.compareAndSet(false, true)) {
             return false;
         }
-        state.setStarting(false);
-        state.setRunning(false);
-        restoreVmOptions();
-        eventManager.unsubscribe(StopInspectionRequest.class, stopListener);
-        if (stopReader && inspection != null) {
+        if (inspection != null) {
+            // Close reader/socket immediately, then asynchronously drain and terminate the resolver.
             inspection.close();
+        }
+        synchronized (environment) {
+            if (environment.getUserData(OWNER) == this) {
+                MessInspectionExecutionOptions.clear(environment);
+                environment.putUserData(OWNER, null);
+            }
         }
         connection.disconnect();
         return true;
@@ -223,6 +178,6 @@ public final class TrackerExecution implements Disposable {
 
     @Override
     public void dispose() {
-        closeResources(true);
+        closeResources();
     }
 }

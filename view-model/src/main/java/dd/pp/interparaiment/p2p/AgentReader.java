@@ -3,11 +3,10 @@ package dd.pp.interparaiment.p2p;
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.EOFException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketTimeoutException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import dd.pp.interparaiment.InspectorConfiguration;
@@ -24,15 +23,19 @@ public class AgentReader implements AutoCloseable {
     private DataInputStream in;
     private final AtomicBoolean closed = new AtomicBoolean();
     private boolean started;
-    private volatile boolean targetTerminated;
+    private final Runnable onConnected;
 
     public AgentReader(final EventManager eventManager, final DataResolvingWorker dataResolver,
-                       final InspectorConfiguration snapshot) throws IOException {
+                       final InspectorConfiguration snapshot, Object inspection, boolean muted,
+                       Runnable onConnected, Runnable onClosed) throws IOException {
         this.eventManager = eventManager;
         this.dataResolver = dataResolver;
         this.serverSocket = new ServerSocket(snapshot.port(), 1, InetAddress.getByName(snapshot.host()));
-        this.serverSocket.setSoTimeout(250);
-        this.worker = new ReadingWorker(this::run, eventManager, this::close);
+        this.onConnected = onConnected;
+        this.worker = new ReadingWorker(this::run, eventManager, () -> {
+            close();
+            onClosed.run();
+        }, inspection, muted);
     }
 
     public synchronized void open() throws IOException {
@@ -48,7 +51,7 @@ public class AgentReader implements AutoCloseable {
 
     private void accept() throws IOException {
         this.eventManager.notify(new ShowMessageInConsoleRequest("Opening connection..."));
-        Socket accepted = awaitConnection();
+        Socket accepted = serverSocket.accept();
         synchronized (this) {
             if (closed.get()) {
                 accepted.close();
@@ -62,26 +65,7 @@ public class AgentReader implements AutoCloseable {
         this.socket.setKeepAlive(true);
 
         this.in = new DataInputStream(new BufferedInputStream(this.socket.getInputStream()));
-    }
-
-    private Socket awaitConnection() throws IOException {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
-        while (true) {
-            try {
-                return serverSocket.accept();
-            } catch (SocketTimeoutException e) {
-                if (targetTerminated) {
-                    throw new IOException("The target exited before the agent connected");
-                }
-                if (System.nanoTime() >= deadline) {
-                    throw new SocketTimeoutException("The agent did not connect within 30 seconds");
-                }
-            }
-        }
-    }
-
-    public void targetTerminated() {
-        targetTerminated = true;
+        onConnected.run();
     }
 
     public void run() throws IOException {
@@ -91,15 +75,27 @@ public class AgentReader implements AutoCloseable {
         if (closed.get()) {
             return;
         }
-        int length = in.readInt();
-        if (length <= 0 || length > 50_000_000) {
-            throw new IOException("Invalid frame length: " + length);
+        int firstHeaderByte = in.read();
+        if (firstHeaderByte < 0) {
+            throw new EOFException();
         }
-
-        byte[] payload = new byte[length];
-        in.readFully(payload);
-
-        dataResolver.emmit(payload);
+        try (DataResolvingWorker.Admission admission = dataResolver.beginAdmission(worker.isReadingMuted())) {
+            // Admission covers the remaining header, payload I/O, enqueueing and decoding.
+            // Waiting on an idle stream before its first byte must not prevent StopRecording.
+            int length = (firstHeaderByte << 24) | (in.readUnsignedByte() << 16)
+                    | (in.readUnsignedByte() << 8) | in.readUnsignedByte();
+            if (length <= 0 || length > 50_000_000) {
+                throw new IOException("Invalid frame length: " + length);
+            }
+            if (admission == null) {
+                // Muting never leaves a payload in the TCP stream or allocates/deserializes it.
+                in.skipNBytes(length);
+            } else {
+                byte[] payload = new byte[length];
+                in.readFully(payload);
+                admission.emit(payload);
+            }
+        }
     }
 
     public boolean isClosed() {

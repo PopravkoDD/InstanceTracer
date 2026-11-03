@@ -17,46 +17,35 @@ import org.jetbrains.annotations.NotNull;
 @State(name = "InstanceTracerSettings", storages = @Storage(StoragePathMacros.WORKSPACE_FILE))
 public final class TrackerSettingsService implements PersistentStateComponent<TrackerSettingsService.SettingsState> {
     private static final Logger LOG = Logger.getInstance(TrackerSettingsService.class);
-    private InspectorConfiguration viewModelConfiguration = new InspectorConfiguration();
+    private List<String> traceTargets = List.of();
     private ClientConfiguration clientConfiguration = new ClientConfiguration();
 
     public static final class SettingsState {
-        public String host = "127.0.0.1";
-        public int port = 35824;
         public List<String> traceTargets = new ArrayList<>();
-        public boolean debugMode;
-        public String developmentProjectRoot = "";
+        public boolean recordOnStart;
     }
 
     @Override
     public synchronized @NotNull SettingsState getState() {
         SettingsState state = new SettingsState();
-        state.host = viewModelConfiguration.host();
-        state.port = viewModelConfiguration.port();
-        state.traceTargets = new ArrayList<>(viewModelConfiguration.traceTargets());
-        state.debugMode = clientConfiguration.debugMode();
-        state.developmentProjectRoot = clientConfiguration.developmentProjectRoot();
+        state.traceTargets = new ArrayList<>(traceTargets);
+        state.recordOnStart = clientConfiguration.recordOnStart();
         return state;
     }
 
     @Override
     public synchronized void loadState(@NotNull SettingsState state) {
+        clientConfiguration = new ClientConfiguration(state.recordOnStart);
         try {
-            clientConfiguration = new ClientConfiguration(state.debugMode, state.developmentProjectRoot);
+            traceTargets = InspectorConfiguration.normalizeTraceTargets(state.traceTargets);
         } catch (IllegalArgumentException e) {
-            LOG.warn("Invalid persisted InstanceTracer development root; using automatic discovery", e);
-            clientConfiguration = new ClientConfiguration(state.debugMode, "");
-        }
-        try {
-            viewModelConfiguration = new InspectorConfiguration(state.host, state.port, state.traceTargets);
-        } catch (IllegalArgumentException e) {
-            LOG.warn("Invalid persisted InstanceTracer receiver settings; using defaults", e);
-            viewModelConfiguration = new InspectorConfiguration();
+            LOG.warn("Invalid persisted InstanceTracer trace targets; using defaults", e);
+            traceTargets = List.of();
         }
     }
 
-    public synchronized InspectorConfiguration getViewModelConfiguration() {
-        return viewModelConfiguration;
+    public synchronized List<String> getTraceTargets() {
+        return traceTargets;
     }
 
     public synchronized ClientConfiguration getClientConfiguration() {
@@ -64,7 +53,7 @@ public final class TrackerSettingsService implements PersistentStateComponent<Tr
     }
 
     public synchronized void saveViewModelConfiguration(InspectorConfiguration configuration) {
-        viewModelConfiguration = Objects.requireNonNull(configuration);
+        traceTargets = configuration.traceTargets();
     }
 
     public synchronized void updateClientConfiguration(ClientConfiguration configuration) {

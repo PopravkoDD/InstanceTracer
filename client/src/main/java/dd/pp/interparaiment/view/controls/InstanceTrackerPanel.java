@@ -29,8 +29,8 @@ import dd.pp.interparaiment.event.requests.ShowMessageInConsoleRequest;
 import dd.pp.interparaiment.view.listeners.InstanceConstructionListener;
 import dd.pp.interparaiment.view.actions.ConfigureTrackerAction;
 import dd.pp.interparaiment.view.actions.DumpTheMessAction;
-import dd.pp.interparaiment.view.actions.TrackerStartAction;
-import dd.pp.interparaiment.view.actions.TrackerStopAction;
+import dd.pp.interparaiment.view.actions.StartRecordingTrackerAction;
+import dd.pp.interparaiment.view.actions.StopRecordingTrackerAction;
 import dd.pp.interparaiment.view.actions.MessActionsContext;
 import dd.pp.interparaiment.view.listeners.MessTreeMouseListener;
 import dd.pp.interparaiment.view.model.construction.ConstructionTreeModel;
@@ -100,8 +100,8 @@ public class InstanceTrackerPanel extends JBPanel {
         final MessActionsContext state = new MessActionsContext(this.updater);
 
         final DumpTheMessAction dumpMessAction = new DumpTheMessAction(state, this.eventManager);
-        final TrackerStartAction startAction = new TrackerStartAction(state, this.eventManager);
-        final TrackerStopAction trackerStopAction = new TrackerStopAction(state, this.eventManager);
+        final StartRecordingTrackerAction startAction = new StartRecordingTrackerAction(this.viewModel);
+        final StopRecordingTrackerAction trackerStopAction = new StopRecordingTrackerAction(this.viewModel);
         final ConfigureTrackerAction configureTrackerAction = new ConfigureTrackerAction(state);
 
         group.add(startAction);

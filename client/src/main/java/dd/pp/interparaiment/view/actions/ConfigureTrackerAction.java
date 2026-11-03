@@ -8,7 +8,6 @@ import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.Project;
 import dd.pp.interparaiment.view.dialogs.TrackerConfigurationDialog;
 import dd.pp.interparaiment.view.service.TracingService;
-import dd.pp.interparaiment.view.service.TrackerSettingsService;
 
 public class ConfigureTrackerAction extends AnAction {
 
@@ -23,8 +22,7 @@ public class ConfigureTrackerAction extends AnAction {
     public void actionPerformed(final @NotNull AnActionEvent anActionEvent) {
         Project project = anActionEvent.getProject();
         if (project != null) {
-            new TrackerConfigurationDialog(project, project.getService(TracingService.class).getViewModel(),
-                    project.getService(TrackerSettingsService.class)).show();
+            new TrackerConfigurationDialog(project, project.getService(TracingService.class).getViewModel()).show();
         }
     }
 }

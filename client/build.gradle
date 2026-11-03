@@ -6,7 +6,7 @@ plugins {
 intellij {
     version = '2023.3.6'
     type = 'IC'
-    plugins = ['java']
+    plugins = ['java', 'gradle']
 }
 
 group = 'dd.pp.interparaiment'

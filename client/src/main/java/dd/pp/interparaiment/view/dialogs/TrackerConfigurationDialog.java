@@ -5,10 +5,8 @@ import java.awt.Dimension;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.DefaultListModel;
-import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
-import javax.swing.JTextField;
 
 import com.intellij.ide.util.TreeClassChooser;
 import com.intellij.ide.util.TreeClassChooserFactory;
@@ -37,34 +35,20 @@ import com.intellij.ui.components.JBList;
 import com.intellij.util.ui.FormBuilder;
 import dd.pp.interparaiment.InspectorConfiguration;
 import dd.pp.interparaiment.InspectorViewModel;
-import dd.pp.interparaiment.view.service.ClientConfiguration;
-import dd.pp.interparaiment.view.service.TrackerSettingsService;
 import org.jetbrains.annotations.Nullable;
 
 public final class TrackerConfigurationDialog extends DialogWrapper {
     private final Project project;
     private final InspectorViewModel viewModel;
-    private final TrackerSettingsService settings;
-    private final JTextField host = new JTextField();
-    private final JTextField port = new JTextField();
-    private final JCheckBox debugMode = new JCheckBox("Debug mode");
-    private final JTextField developmentRoot = new JTextField();
     private final DefaultListModel<String> targets = new DefaultListModel<>();
     private final JBList<String> targetList = new JBList<>(targets);
 
-    public TrackerConfigurationDialog(Project project, InspectorViewModel viewModel,
-                                      TrackerSettingsService settings) {
+    public TrackerConfigurationDialog(Project project, InspectorViewModel viewModel) {
         super(project);
         this.project = project;
         this.viewModel = viewModel;
-        this.settings = settings;
         InspectorConfiguration options = viewModel.getConfiguration();
-        ClientConfiguration client = settings.getClientConfiguration();
-        host.setText(options.host());
-        port.setText(Integer.toString(options.port()));
         options.traceTargets().forEach(targets::addElement);
-        debugMode.setSelected(client.debugMode());
-        developmentRoot.setText(client.developmentProjectRoot());
         setTitle("Configure InstanceTracer");
         init();
     }
@@ -83,13 +67,8 @@ public final class TrackerConfigurationDialog extends DialogWrapper {
                 .disableUpDownActions().createPanel();
         listPanel.setPreferredSize(new Dimension(520, 180));
         return FormBuilder.createFormBuilder()
-                .addLabeledComponent("Host:", host)
-                .addLabeledComponent("Port:", port)
-                .addComponent(debugMode)
                 .addLabeledComponent("Trace targets:", listPanel, true)
                 .addComponent(new JBLabel("Class completion and search include All Places. Unresolved names are kept."))
-                .addLabeledComponent("Development project root:", developmentRoot)
-                .addComponent(new JBLabel("Leave empty to locate InstanceTracer above the open project."))
                 .getPanel();
     }
 
@@ -105,24 +84,17 @@ public final class TrackerConfigurationDialog extends DialogWrapper {
     }
 
     private InspectorConfiguration readOptions() {
-        final int enteredPort;
-        try {
-            enteredPort = Integer.parseInt(port.getText().trim());
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Port must be an integer between 1 and 65535");
-        }
         List<String> traceTargets = new ArrayList<>();
         for (int i = 0; i < targets.size(); i++) {
             traceTargets.add(targets.get(i));
         }
-        return new InspectorConfiguration(host.getText(), enteredPort, traceTargets);
+        return viewModel.getConfiguration().withTraceTargets(traceTargets);
     }
 
     @Override
     protected @Nullable ValidationInfo doValidate() {
         try {
             readOptions();
-            readClientOptions();
             return null;
         } catch (IllegalArgumentException e) {
             return new ValidationInfo(e.getMessage());
@@ -132,21 +104,14 @@ public final class TrackerConfigurationDialog extends DialogWrapper {
     @Override
     protected void doOKAction() {
         final InspectorConfiguration options;
-        final ClientConfiguration client;
         try {
             options = readOptions();
-            client = readClientOptions();
         } catch (IllegalArgumentException e) {
             setErrorText(e.getMessage());
             return;
         }
-        viewModel.updateOptions(options);
-        settings.updateClientConfiguration(client);
+        viewModel.updateTraceTargets(options.traceTargets());
         super.doOKAction();
-    }
-
-    private ClientConfiguration readClientOptions() {
-        return new ClientConfiguration(debugMode.isSelected(), developmentRoot.getText());
     }
 
     private static final class TargetDialog extends DialogWrapper {
@@ -228,7 +193,7 @@ public final class TrackerConfigurationDialog extends DialogWrapper {
         @Override
         protected @Nullable ValidationInfo doValidate() {
             try {
-                new InspectorConfiguration("127.0.0.1", 35824, List.of(editor.getText()));
+                InspectorConfiguration.normalizeTraceTargets(List.of(editor.getText()));
                 return null;
             } catch (IllegalArgumentException e) {
                 return new ValidationInfo(e.getMessage(), editor);

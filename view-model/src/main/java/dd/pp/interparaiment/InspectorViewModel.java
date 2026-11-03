@@ -2,7 +2,9 @@ package dd.pp.interparaiment;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import dd.pp.interparaiment.event.EventManager;
 import dd.pp.interparaiment.event.requests.AgentConfigurationChangedEvent;
@@ -15,64 +17,39 @@ import dd.pp.interparaiment.p2p.DataResolvingWorker;
 
 public class InspectorViewModel implements AutoCloseable {
     private final EventManager eventManager = new EventManager();
-    private AgentReader reader;
+    private final MessModel messModel = new MessModel();
     private InspectorConfiguration configuration;
-    private boolean resolverStarted;
-    private boolean closed;
+    private PreparedInspection inspection;
     private boolean preparing;
+    private boolean closed;
     private long preparationVersion;
-    private final DataResolvingWorker dataResolver;
-
-    private final MessModel messModel;
-
-
-    public InspectorViewModel() {
-        this(new InspectorConfiguration());
-    }
 
     public InspectorViewModel(InspectorConfiguration configuration) {
         this.configuration = Objects.requireNonNull(configuration, "configuration");
-        this.messModel = new MessModel();
-
-        this.dataResolver = new DataResolvingWorker(this);
-
-        initListeners();
-    }
-
-    private void initListeners() {
-        this.eventManager.subscribe(StartInspectionRequest.class, data -> {
-            if (data.getInspection() == null) {
-                final long version;
-                synchronized (this) {
-                    version = preparationVersion;
-                }
-                CompletableFuture.runAsync(() -> startCurrentInspection(version));
-                return;
-            }
-            try {
-                startInspection(data.getInspection());
-            } catch (IOException e) {
-                this.eventManager.notify(new ShowMessageInConsoleRequest("Connection failed: " + e.getMessage()));
+        eventManager.subscribe(StartInspectionRequest.class, request -> {
+            PreparedInspection requested = request.getInspection();
+            if (requested != null) {
+                startReading(requested);
             }
         });
-
-        this.eventManager.subscribe(StopInspectionRequest.class, data -> stopInspection());
+        eventManager.subscribe(StopInspectionRequest.class, request -> {
+            PreparedInspection active = getActiveInspection();
+            if (active != null) {
+                active.close();
+            }
+        });
     }
 
-    private void startCurrentInspection(long version) {
-        try {
-            synchronized (this) {
-                if (closed || version != preparationVersion) {
-                    return;
-                }
-                if (reader != null && !reader.isClosed()) {
-                    startInspection(null);
-                    return;
-                }
+    private void startReading(PreparedInspection requested) {
+        synchronized (this) {
+            if (inspection != requested || closed) {
+                throw new IllegalStateException("This inspection no longer owns the receiver");
             }
-            PreparedInspection inspection = prepareInspection(getConfiguration(), version);
-            startInspection(inspection);
+        }
+        try {
+            requested.reader.open();
         } catch (IOException e) {
+            requested.close();
             eventManager.notify(new ShowMessageInConsoleRequest("Connection failed: " + e.getMessage()));
         }
     }
@@ -89,50 +66,55 @@ public class InspectorViewModel implements AutoCloseable {
         }
     }
 
-    /** The client supplies BridgePath and the agent JAR, which are platform-specific. */
+    public synchronized void updateTraceTargets(List<String> targets) {
+        updateOptions(configuration.withTraceTargets(targets));
+    }
+
+    /** Complete JVM option, kept independent of the IntelliJ execution adapters. */
     public synchronized String getAgentArgs() {
-        if (configuration.traceTargets().isEmpty()) {
-            throw new IllegalStateException("Configure at least one trace target before starting tracking");
-        }
-        StringBuilder args = new StringBuilder();
-        for (String target : configuration.traceTargets()) {
-            args.append("TraceTarget=").append(target).append(',');
-        }
-        return args.append("host=").append(configuration.host())
-                .append(",port=").append(configuration.port()).toString();
+        return getAgentArgs(configuration);
     }
 
-    /** Bind before launching the agent, on a background thread. Accepting starts via the existing command. */
-    public PreparedInspection prepareInspection(InspectorConfiguration snapshot) throws IOException {
-        return prepareInspection(snapshot, -1);
+    public String getAgentArgs(InspectorConfiguration snapshot) {
+        if (snapshot.traceTargets().isEmpty()) {
+            throw new IllegalStateException("Configure at least one trace target before launching MessInspection");
+        }
+        StringBuilder args = new StringBuilder("-javaagent:").append(snapshot.agentPath())
+                .append("=BridgePath=").append(snapshot.bridgePath());
+        for (String target : snapshot.traceTargets()) {
+            args.append(",TraceTarget=").append(target);
+        }
+        return args.append(",host=").append(snapshot.host())
+                .append(",port=").append(snapshot.port()).toString();
     }
 
-    private PreparedInspection prepareInspection(InspectorConfiguration snapshot, long expectedVersion) throws IOException {
+    public synchronized PreparedInspection getActiveInspection() {
+        return inspection;
+    }
+
+    /** Resolving artifact paths precedes this call; bind the receiver on a background thread. */
+    public PreparedInspection prepareInspection(InspectorConfiguration snapshot, boolean recordOnStart) throws IOException {
         final long version;
         synchronized (this) {
             if (closed) {
                 throw new IOException("ViewModel has been disposed");
             }
-            if (expectedVersion >= 0 && expectedVersion != preparationVersion) {
-                throw new IOException("Inspection preparation was cancelled");
-            }
-            if (preparing || (reader != null && !reader.isClosed())) {
-                throw new IOException("An inspection is already prepared, running, or draining; stop tracking or wait for it to finish");
+            if (preparing || inspection != null) {
+                throw new IOException("This project already has an inspection session or a session still draining");
             }
             preparing = true;
             version = ++preparationVersion;
         }
-        // DNS and binding must not hold the ViewModel monitor needed by IDE actions.
-        AgentReader prepared = null;
+        PreparedInspection prepared = null;
         try {
-            prepared = new AgentReader(eventManager, dataResolver, Objects.requireNonNull(snapshot));
+            prepared = new PreparedInspection(snapshot, recordOnStart);
             synchronized (this) {
                 if (closed || version != preparationVersion) {
                     throw new IOException("Inspection preparation was cancelled");
                 }
-                reader = prepared;
-                return new PreparedInspection(prepared);
+                inspection = prepared;
             }
+            return prepared;
         } catch (IOException | RuntimeException e) {
             if (prepared != null) {
                 prepared.close();
@@ -145,60 +127,84 @@ public class InspectorViewModel implements AutoCloseable {
         }
     }
 
-    private synchronized void startInspection(PreparedInspection inspection) throws IOException {
-        if (inspection != null && reader != inspection.prepared) {
-            throw new IOException("This inspection no longer owns the receiver");
-        }
-        if (reader == null || reader.isClosed()) {
-            throw new IOException("Prepare the receiver on a background thread before starting inspection");
-        }
-        if (!resolverStarted) {
-            dataResolver.start();
-            resolverStarted = true;
-        }
-        reader.open();
-    }
-
-    private synchronized void stopInspection() {
-        preparationVersion++;
-        if (reader != null) {
-            reader.close();
-            reader = null;
-        }
-    }
-
-    /** Ownership token: failure of one launch cannot close another launch's receiver. */
+    /** Owns a reserved listener, then the connected session, until its workers have drained. */
     public final class PreparedInspection implements AutoCloseable {
-        private final AgentReader prepared;
+        private final AgentReader reader;
+        private final DataResolvingWorker dataResolver;
+        private final boolean recordOnStart;
+        private final AtomicBoolean closing = new AtomicBoolean();
+        private volatile boolean connected;
 
-        private PreparedInspection(AgentReader prepared) {
-            this.prepared = prepared;
+        private PreparedInspection(InspectorConfiguration snapshot, boolean recordOnStart) throws IOException {
+            this.recordOnStart = recordOnStart;
+            dataResolver = new DataResolvingWorker(InspectorViewModel.this);
+            reader = new AgentReader(eventManager, dataResolver, snapshot, this, !recordOnStart,
+                    this::connectionReady, this::close);
         }
 
-        public void targetTerminated() {
-            prepared.targetTerminated();
+        private void connectionReady() {
+            if (closing.get()) {
+                return;
+            }
+            if (recordOnStart) {
+                dataResolver.resumeProcessing();
+            }
+            connected = true;
+        }
+
+        public boolean isConnected() {
+            return connected && !closing.get();
+        }
+
+        public DataResolvingWorker.RecordingState getRecordingState() {
+            return dataResolver.getRecordingState();
+        }
+
+        /** The caller publishes RecordingStartedEvent only after this method returns. */
+        public void startRecording() {
+            if (!isConnected()) {
+                throw new IllegalStateException("There is no connected inspection session");
+            }
+            dataResolver.resumeProcessing();
+        }
+
+        /** Admission closes before the caller publishes RecordingStoppedEvent. Never waits on the caller. */
+        public CompletableFuture<Void> stopRecording() {
+            return dataResolver.stopAndDrain();
         }
 
         @Override
         public void close() {
-            synchronized (InspectorViewModel.this) {
-                prepared.close();
-                if (reader == prepared) {
-                    reader = null;
-                }
+            if (!closing.compareAndSet(false, true)) {
+                return;
             }
+            connected = false;
+            reader.close();
+            dataResolver.shutdownAfterDraining().whenComplete((ignored, error) -> {
+                synchronized (InspectorViewModel.this) {
+                    if (inspection == this) {
+                        inspection = null;
+                    }
+                }
+            });
         }
     }
 
     @Override
-    public synchronized void close() {
-        closed = true;
-        stopInspection();
-        dataResolver.interrupt();
+    public void close() {
+        PreparedInspection active;
+        synchronized (this) {
+            closed = true;
+            preparationVersion++;
+            active = inspection;
+        }
+        if (active != null) {
+            active.close();
+        }
     }
 
     public EventManager getEventManager() {
-        return this.eventManager;
+        return eventManager;
     }
 
     public MessModel getMessModel() {

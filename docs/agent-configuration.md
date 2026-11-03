@@ -32,9 +32,16 @@ its existing argument handling.
 
 ## IntelliJ client responsibilities
 
-`InspectorViewModel.getAgentArgs()` formats repeated `TraceTarget`, `host`, and
-`port` from one immutable receiver configuration. The client resolves both JAR
-paths, supplies `BridgePath`, and wraps these arguments in a temporary
-`-javaagent` JVM option. It does not format receiver options independently.
-See [tracking lifecycle](lifecycle.md) for project persistence, development artifact
-resolution, supported Run/Debug configurations, and receiver startup ordering.
+`IJavaAgentResolver` supplies the existing agent/hooks artifact paths before
+`InspectorConfiguration` is constructed. The immutable ViewModel-owned snapshot
+contains both absolute resolved paths as well as targets, host, and port.
+`InspectorViewModel.getAgentArgs()` constructs the complete `-javaagent` option,
+including `BridgePath`. Client execution adapters add that single option to native
+Application JavaParameters or a task-scoped Gradle JavaExec init script. They do
+not duplicate argument formatting or modify stored VM settings.
+
+The agent still requires at least one target, so the empty target default can be
+saved but cannot be launched. Commas in hooks paths and '=' in agent paths are
+rejected because the documented/JVM argument formats cannot represent them.
+See [execution and recording lifecycle](lifecycle.md) for ownership, configuration
+UI, developer properties, supported executions, and recording transitions.

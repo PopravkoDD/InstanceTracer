@@ -12,10 +12,18 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.java</depends>
+    <depends>org.jetbrains.plugins.gradle</depends>
 
     <!-- Extension points defined by the plugin.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
+        <configurationType implementation="dd.pp.interparaiment.view.run.MessInspectionConfigurationType"/>
+        <programRunner implementation="dd.pp.interparaiment.view.run.MessInspectionProgramRunner$ApplicationRun"/>
+        <programRunner implementation="dd.pp.interparaiment.view.run.MessInspectionProgramRunner$ApplicationDebug"/>
+        <programRunner implementation="dd.pp.interparaiment.view.run.MessInspectionProgramRunner$GradleRun"/>
+        <programRunner implementation="dd.pp.interparaiment.view.run.MessInspectionProgramRunner$GradleDebug"/>
+        <projectConfigurable id="dd.pp.interparaiment.trackerSettings" displayName="InstanceTracer"
+                             parentId="tools" instance="dd.pp.interparaiment.view.service.TrackerSettingsConfigurable"/>
         <projectService serviceInterface="dd.pp.interparaiment.view.service.IJavaAgentResolver"
                         serviceImplementation="dd.pp.interparaiment.view.service.DevJavaAgentResolver"/>
         <toolWindow
