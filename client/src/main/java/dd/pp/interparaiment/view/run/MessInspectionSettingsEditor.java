@@ -1,104 +1,96 @@
 package dd.pp.interparaiment.view.run;
 
-import java.awt.BorderLayout;
-import java.util.EnumMap;
+import java.awt.Component;
+import java.util.Comparator;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
-import javax.swing.JPanel;
+import javax.swing.JList;
 import javax.swing.JTextField;
-import com.intellij.execution.configurations.RunConfiguration;
+import javax.swing.event.DocumentEvent;
+import com.intellij.execution.RunManager;
+import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.openapi.options.SettingsEditor;
-import com.intellij.openapi.util.Disposer;
+import com.intellij.openapi.project.Project;
+import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.FormBuilder;
 import dd.pp.interparaiment.InspectorConfiguration;
 import org.jetbrains.annotations.NotNull;
 
 final class MessInspectionSettingsEditor extends SettingsEditor<MessInspectionConfiguration> {
-    private final JComboBox<MessInspectionConfiguration.Kind> kind = new JComboBox<>(MessInspectionConfiguration.Kind.values());
+    private final Project project;
+    private final JComboBox<RunnerAndConfigurationSettings> configurations = new JComboBox<>();
     private final JTextField host = new JTextField();
     private final JTextField port = new JTextField();
-    private final JPanel nativePanel = new JPanel(new BorderLayout());
-    private final JBLabel error = new JBLabel();
-    private final EnumMap<MessInspectionConfiguration.Kind, RunConfiguration> drafts =
-            new EnumMap<>(MessInspectionConfiguration.Kind.class);
-    private MessInspectionConfiguration source;
-    private MessInspectionConfiguration.Kind displayedKind;
-    private SettingsEditor<RunConfiguration> nativeEditor;
+    private final JBLabel selectionMessage = new JBLabel();
     private boolean resetting;
 
-    MessInspectionSettingsEditor() {
-        kind.addActionListener(event -> switchEditor());
-    }
-
-    @Override
-    public boolean isReadyForApply() {
-        return nativeEditor != null && nativeEditor.isReadyForApply();
-    }
-
-    @Override
-    public boolean isSpecificallyModified() {
-        return nativeEditor != null && nativeEditor.isSpecificallyModified();
+    MessInspectionSettingsEditor(Project project) {
+        this.project = project;
+        configurations.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                          boolean selected, boolean focused) {
+                super.getListCellRendererComponent(list, value, index, selected, focused);
+                if (value instanceof RunnerAndConfigurationSettings settings) {
+                    setText(settings.getName());
+                    setIcon(settings.getType().getIcon());
+                    setToolTipText(settings.getType().getDisplayName());
+                } else {
+                    setText("Select a Run Configuration");
+                    setToolTipText(null);
+                }
+                return this;
+            }
+        });
+        configurations.addActionListener(event -> {
+            if (!resetting) {
+                selectionMessage.setText("");
+                fireEditorStateChanged();
+            }
+        });
+        DocumentAdapter changes = new DocumentAdapter() {
+            @Override
+            protected void textChanged(@NotNull DocumentEvent event) {
+                if (!resetting) {
+                    fireEditorStateChanged();
+                }
+            }
+        };
+        host.getDocument().addDocumentListener(changes);
+        port.getDocument().addDocumentListener(changes);
     }
 
     @Override
     protected void resetEditorFrom(@NotNull MessInspectionConfiguration configuration) {
         resetting = true;
         try {
-            source = configuration;
-            drafts.clear();
-            // These are UI transaction drafts, not execution-time copies.
-            drafts.put(configuration.getKind(), configuration.getPeer().clone());
-            kind.setSelectedItem(configuration.getKind());
+            configurations.removeAllItems();
+            RunManager.getInstance(project).getAllSettings().stream()
+                    .filter(settings -> !(settings.getConfiguration() instanceof MessInspectionConfiguration))
+                    .sorted(Comparator.comparing(RunnerAndConfigurationSettings::getName, String.CASE_INSENSITIVE_ORDER)
+                            .thenComparing(settings -> settings.getType().getDisplayName()))
+                    .forEach(configurations::addItem);
+            RunnerAndConfigurationSettings selected = configuration.findUnderlyingConfiguration();
+            configurations.setSelectedItem(selected);
             host.setText(configuration.getHost());
             port.setText(Integer.toString(configuration.getPort()));
-            showNativeEditor(configuration.getKind());
-            error.setText("");
+            selectionMessage.setText(selected == null && !configuration.getConfigurationId().isEmpty()
+                    ? "Missing configuration: " + configuration.getConfigurationName() : "");
         } finally {
             resetting = false;
         }
     }
 
-    private void switchEditor() {
-        if (resetting || source == null) {
-            return;
-        }
-        try {
-            if (!nativeEditor.isReadyForApply()) {
-                throw new ConfigurationException("Wait for the native configuration editor to finish loading");
-            }
-            nativeEditor.applyTo(drafts.get(displayedKind));
-            showNativeEditor((MessInspectionConfiguration.Kind) kind.getSelectedItem());
-            error.setText("");
-            fireEditorStateChanged();
-        } catch (ConfigurationException e) {
-            error.setText(e.getMessage());
-            resetting = true;
-            kind.setSelectedItem(displayedKind);
-            resetting = false;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void showNativeEditor(MessInspectionConfiguration.Kind selected) {
-        if (nativeEditor != null) {
-            Disposer.dispose(nativeEditor);
-        }
-        RunConfiguration draft = drafts.computeIfAbsent(selected, source::createPeer);
-        nativeEditor = (SettingsEditor<RunConfiguration>) draft.getConfigurationEditor();
-        Disposer.register(this, nativeEditor);
-        nativeEditor.addSettingsEditorListener(editor -> fireEditorStateChanged());
-        nativeEditor.resetFrom(draft);
-        nativePanel.removeAll();
-        nativePanel.add(nativeEditor.getComponent(), BorderLayout.CENTER);
-        displayedKind = selected;
-        nativePanel.revalidate();
-        nativePanel.repaint();
-    }
-
     @Override
     protected void applyEditorTo(@NotNull MessInspectionConfiguration configuration) throws ConfigurationException {
+        RunnerAndConfigurationSettings selected = (RunnerAndConfigurationSettings) configurations.getSelectedItem();
+        if (selected == null || !RunManager.getInstance(project).getAllSettings().contains(selected)
+                || selected.getConfiguration() instanceof MessInspectionConfiguration) {
+            throw new ConfigurationException("Select an existing Run Configuration");
+        }
         final int enteredPort;
         try {
             enteredPort = Integer.parseInt(port.getText().trim());
@@ -106,23 +98,20 @@ final class MessInspectionSettingsEditor extends SettingsEditor<MessInspectionCo
         } catch (IllegalArgumentException e) {
             throw new ConfigurationException("Host must be a hostname/IP and port must be between 1 and 65535: " + e.getMessage());
         }
-        configuration.setKind(displayedKind);
-        nativeEditor.applyTo(configuration.getPeer());
+        configuration.setUnderlyingConfiguration(selected);
         configuration.setHost(host.getText().trim());
         configuration.setPort(enteredPort);
     }
 
     @Override
     protected @NotNull JComponent createEditor() {
-        JPanel options = FormBuilder.createFormBuilder()
-                .addLabeledComponent("Underlying configuration:", kind)
+        return FormBuilder.createFormBuilder()
+                .addLabeledComponent("Run Configuration:", configurations)
+                .addComponent(selectionMessage)
+                .addComponent(new JBLabel("Create and configure the application in its own Run Configuration first."))
                 .addLabeledComponent("Inspection host:", host)
                 .addLabeledComponent("Inspection port:", port)
                 .addComponent(new JBLabel("Trace targets are configured in the InstanceTracker tool window."))
-                .addComponent(error).getPanel();
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.add(options, BorderLayout.NORTH);
-        panel.add(nativePanel, BorderLayout.CENTER);
-        return panel;
+                .getPanel();
     }
 }

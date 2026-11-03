@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.ExecutionListener;
 import com.intellij.execution.ExecutionManager;
-import com.intellij.execution.configurations.RunConfiguration;
+import com.intellij.execution.configurations.RuntimeConfigurationException;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.openapi.Disposable;
@@ -32,19 +32,17 @@ public final class TrackerExecution implements Disposable {
     private final Project project;
     private final ExecutionEnvironment environment;
     private final MessInspectionConfiguration configuration;
-    private final RunConfiguration expectedPeer;
     private final ThrowableRunnable<ExecutionException> nativeLaunch;
     private final MessageBusConnection connection;
     private final AtomicBoolean finished = new AtomicBoolean();
     private volatile InspectorViewModel.PreparedInspection inspection;
     private volatile InspectorViewModel viewModel;
 
-    public TrackerExecution(ExecutionEnvironment environment, ThrowableRunnable<ExecutionException> nativeLaunch) {
+    public TrackerExecution(MessInspectionConfiguration configuration, ExecutionEnvironment environment,
+                            ThrowableRunnable<ExecutionException> nativeLaunch) {
         this.environment = environment;
-        this.configuration = (MessInspectionConfiguration) environment.getRunProfile();
-        expectedPeer = configuration.getPeer();
+        this.configuration = configuration;
         this.nativeLaunch = nativeLaunch;
-        configuration.getPeer().setName(configuration.getName());
         if (environment.getExecutionId() == 0) {
             environment.assignNewExecutionId();
         }
@@ -88,6 +86,17 @@ public final class TrackerExecution implements Disposable {
                 if (finished.get()) {
                     return;
                 }
+                synchronized (environment) {
+                    if (finished.get()) {
+                        return;
+                    }
+                    environment.putUserData(OWNER, this);
+                    MessInspectionExecutionOptions.apply(environment, option);
+                }
+                environment.getRunnerAndConfigurationSettings().checkSettings(environment.getExecutor());
+                if (finished.get()) {
+                    return;
+                }
                 inspection = viewModel.prepareInspection(snapshot, recordOnStart);
                 if (finished.get()) {
                     inspection.close();
@@ -102,14 +111,12 @@ public final class TrackerExecution implements Disposable {
                         inspection.close();
                         return;
                     }
-                    environment.putUserData(OWNER, this);
-                    MessInspectionExecutionOptions.apply(environment, option);
                 }
                 viewModel.getEventManager().notify(new StartInspectionRequest(inspection));
                 ApplicationManager.getApplication().invokeLater(this::launch, ModalityState.nonModal());
             } catch (ProcessCanceledException e) {
                 finish();
-            } catch (IOException | ExecutionException | RuntimeException e) {
+            } catch (IOException | ExecutionException | RuntimeConfigurationException | RuntimeException e) {
                 fail(e.getMessage());
             }
         });
@@ -121,13 +128,7 @@ public final class TrackerExecution implements Disposable {
             return;
         }
         try {
-            if (expectedPeer != configuration.getPeer()
-                    || !environment.getRunner().canRun(environment.getExecutor().getId(), configuration)) {
-                throw new ExecutionException("The underlying configuration type changed; launch MessInspection again from the toolbar");
-            }
-            if (environment.getState() == null) {
-                throw new ExecutionException("The underlying configuration has no executable state");
-            }
+            MessInspectionExecutionOptions.validateState(environment);
             nativeLaunch.run();
         } catch (ProcessCanceledException e) {
             finish();

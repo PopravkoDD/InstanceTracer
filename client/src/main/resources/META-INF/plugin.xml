@@ -18,10 +18,7 @@
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
         <configurationType implementation="dd.pp.interparaiment.view.run.MessInspectionConfigurationType"/>
-        <programRunner implementation="dd.pp.interparaiment.view.run.MessInspectionProgramRunner$ApplicationRun"/>
-        <programRunner implementation="dd.pp.interparaiment.view.run.MessInspectionProgramRunner$ApplicationDebug"/>
-        <programRunner implementation="dd.pp.interparaiment.view.run.MessInspectionProgramRunner$GradleRun"/>
-        <programRunner implementation="dd.pp.interparaiment.view.run.MessInspectionProgramRunner$GradleDebug"/>
+        <programRunner implementation="dd.pp.interparaiment.view.run.MessInspectionProgramRunner" order="first"/>
         <projectConfigurable id="dd.pp.interparaiment.trackerSettings" displayName="InstanceTracer"
                              parentId="tools" instance="dd.pp.interparaiment.view.service.TrackerSettingsConfigurable"/>
         <projectService serviceInterface="dd.pp.interparaiment.view.service.IJavaAgentResolver"
@@ -33,6 +30,11 @@
                 canCloseContents="false"
                 secondary="false"/>
     </extensions>
+
+    <projectListeners>
+        <listener class="dd.pp.interparaiment.view.run.MessInspectionRunManagerListener"
+                  topic="com.intellij.execution.RunManagerListener"/>
+    </projectListeners>
 
     <actions>
 <!--        <action id="plugin.Test" class="plugin.Test" text="Test" description="TestNice">-->

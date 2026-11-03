@@ -25,7 +25,7 @@ public final class MessInspectionConfigurationType implements ConfigurationType 
     public @NotNull String getDisplayName() { return "MessInspection"; }
 
     @Override
-    public @NotNull String getConfigurationTypeDescription() { return "Inspect an Application or Gradle JavaExec JVM"; }
+    public @NotNull String getConfigurationTypeDescription() { return "Inspect a JVM using an existing Run Configuration"; }
 
     @Override
     public Icon getIcon() { return AllIcons.Debugger.ThreadRunning; }

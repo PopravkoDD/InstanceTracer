@@ -4,26 +4,33 @@
 
 | Owner | Settings |
 | --- | --- |
-| `MessInspectionConfiguration` | Embedded native Application or Gradle settings; inspection host and port |
+| `MessInspectionConfiguration` | Reference to an existing project Run Configuration; inspection host and port |
 | `TrackerConfigurationDialog` | TraceTargets only, with the existing PSI completion and All Places chooser |
 | `TrackerSettingsService` / `ClientConfiguration` | Project trace target persistence and the `recordOnStart` preference |
 | `DevJavaAgentResolver` | Build-time development artifact location, read from its properties resource |
 | `InspectorConfiguration` | Immutable resolved snapshot: host, port, targets, agentPath, bridgePath |
 
-Create a **MessInspection** configuration through the standard IntelliJ Run/Debug
-configuration UI. Select Application or Gradle, configure its native editor, then
-set the inspection host and port. Choose Run or Debug with the normal IDE executor
-controls; the former client Debug mode preference is no longer a second executor
-selector. Host defaults to `127.0.0.1` and port to `35824`.
+First create and configure a regular IntelliJ Run Configuration. Create a
+**MessInspection** configuration and select that existing configuration by name,
+then set the inspection host and port. The selector lists all configurations
+registered with the project's RunManager except MessInspection configurations;
+it does not filter by Application/Gradle or embed another type's editor. Choose
+Run or Debug with the normal IDE executor controls. Host defaults to
+`127.0.0.1` and port to `35824`.
 
-The embedded native profile is owned by MessInspection, not a reference to another
-saved configuration. Its native `SettingsEditor` handles application/Gradle fields,
-and native `readExternal`/`writeExternal` persist them inside the MessInspection
-configuration. Before-launch tasks and console/log settings are delegated to that
-profile and persisted through IntelliJ's regular Run Configuration mechanism.
-Only editor/template transactions use `clone()` to isolate drafts. Executing a
-configuration creates no Run Configuration copies and does not modify stored VM
-parameters or unrelated configurations.
+MessInspection persists the selected configuration's RunManager unique ID and a
+display name inside its own `<inspection>` settings. A project RunManager listener
+updates those references when RunManager reports a renamed configuration's old
+ID. Deleted configurations remain unresolved and produce an explicit selection
+error instead of choosing a different configuration. Reopening the editor
+restores the selection without changing the underlying profile. Older
+MessInspection settings containing an embedded Application/Gradle profile retain
+their endpoint but require selecting an existing configuration; embedded profiles
+are no longer read or written and are not automatically registered.
+
+Every launch creates a private native configuration/settings copy. The original
+profile, its VM options, before-launch tasks, and runner settings are never edited.
+The copy is not added to RunManager, saved, or displayed as another configuration.
 
 Set **Record automatically when an inspection connects** in **Settings | Tools |
 InstanceTracer**. The default is false. This preference is captured for the next
@@ -80,58 +87,79 @@ ViewModel with fake/unresolved paths.
 
 ## Run/Debug integration
 
-`MessInspectionConfigurationType` and its factory register the independently
-persisted type. Its native-editor delegate changes with the selected underlying
-type. Four small runner adapters correspond to Application Run/Debug and Gradle
-Run/Debug. They retain MessInspection as the execution profile, including console
-reruns. Application adapters inherit the native Java Run/Debug implementations;
-Gradle Debug inherits the native external-system debugger, and Gradle Run delegates
-to the native runner because its implementation is final. There is no custom
-process launcher or `ProcessBuilder`.
+`MessInspectionConfigurationType` registers the wrapper. One
+`MessInspectionProgramRunner` handles standard Run and Debug. It resolves the
+saved reference against `RunManager.getAllSettings()`, then uses the platform's
+`RunnerAndConfigurationSettingsImpl.clone()` to copy both the native profile and
+its per-runner settings. Before-launch tasks are cloned separately because the
+native profile clone can retain the original task objects. The pinned IDEA
+2023.3.6 settings implementation exposes this clone; other settings
+implementations fail explicitly rather than receive a shallow copy.
 
-The adapted `TrackerExecution` now handles execution ownership only:
+The native program runner is discovered with `ProgramRunner.getRunner()` for the
+copied profile and requested executor. `ExecutionEnvironmentBuilder` receives the
+copied settings and the native runner's settings. The environment keeps
+MessInspection's small dispatch runner so standard console reruns resolve the
+current reference and create another fresh copy/session. The native runner still
+executes the native profile, preserving its process state, before-launch work,
+console, and debugger. Only inspection copies carry the private rerun marker;
+ordinary Run/Debug executions are unaffected. There is no custom process launcher
+or `ProcessBuilder`.
 
-1. Capture execution options and `recordOnStart`.
+`TrackerExecution` retains its execution/session ownership responsibilities:
+
+1. Capture the endpoint and `recordOnStart`.
 2. Resolve both artifacts and construct the immutable snapshot on a pooled thread.
-3. Request the complete `-javaagent` option from ViewModel.
-4. Reserve/bind a receiver through `prepareInspection(snapshot, recordOnStart)`.
-5. Install options into execution-local state and send the existing scoped
-   `StartInspectionRequest`. The reader starts accepting in the background before
-   the target is created, avoiding the agent's initial connection race.
-6. Invoke the native runner, retaining its before-launch tasks, console, debugger,
-   execution errors, and cancellation handling.
-7. On the matching environment's `processNotStarted`/`processTerminated`, or project
-   disposal, close the owned session and remove lifecycle subscriptions/state.
+3. Request the complete `-javaagent` option from `InspectorViewModel.getAgentArgs(snapshot)`.
+4. Apply that option to the private execution copy and check its native settings.
+5. Reserve/bind a receiver through `prepareInspection(snapshot, recordOnStart)` and
+   send the existing scoped `StartInspectionRequest`. Accept runs in the background
+   before the native target starts, preserving startup-race handling.
+6. Check the native execution state and invoke the selected native runner.
+7. On the actual copied environment's `processNotStarted`/`processTerminated`, or
+   project disposal, close the owned session and remove its subscriptions/options.
 
-Because Gradle can build for some time before JavaExec starts, the bound listener
-has no arbitrary pre-connection timeout. It is owned by the pending execution and
-closed on execution failure, cancellation, completion, or project disposal.
+The process listener compares environment identity against the environment passed
+to the native runner, not the outer wrapper's environment. Recording actions and
+`PreparedInspection` are unchanged. Because Gradle can build before JavaExec
+starts, the bound listener has no arbitrary pre-connection timeout; failure,
+cancellation, completion, and disposal retain the existing cleanup path.
 
-Application uses a thin native `JavaApplicationCommandLineState` subclass to add
-the option to freshly created `JavaParameters`, not to the configuration's VM
-settings. The complete argument is one parameter, including paths with spaces.
-For Gradle, `GradleTaskManager.INIT_SCRIPT_KEY` is set only on the execution's
-`ExternalSystemRunnableState`. The native plugin carries this init script into
-its build execution. It checks the exact requested task in the execution graph,
-requires `JavaExec`, and appends the option only to that task's JVM arguments in
-`doFirst`. Gradle daemon VM options are not changed. Other JavaExec tasks in the
-dependency graph receive no inspection agent from this script.
+Java configurations must expose `CommonJavaRunConfigurationParameters` and
+produce a `JavaCommandLineState`. The complete generated option is appended as
+one correctly quoted VM parameter on the copy, preserving the original VM option
+text. The code does not reproduce Application or other Java state implementations.
+Each launch starts from the saved original, so earlier injected options cannot
+accumulate; an identical existing option is not appended again.
 
-IntelliJ's `ExecutionEnvironment.getState()` constructs state rather than caching
-it. MessInspection therefore holds prepared state in environment user data for
-one execution. Every launch/rerun resets that state and option; cleanup removes
-only its owner's data. Repeated state lookups reuse the prepared Gradle init
-script and cannot silently lose it. Argument insertion is idempotent within the
-execution, and persisted settings never accumulate `-javaagent` options.
+Gradle retains the existing small target-task injection helper. The generated
+script is set on the copied configuration's `GradleTaskManager.INIT_SCRIPT_KEY`,
+which the native external-system implementation copies to each newly requested
+`ExternalSystemRunnableState`. No wrapper state cache is needed. An existing
+runtime init script is retained. The script checks the exact requested task in
+the execution graph, requires `JavaExec`, and appends the agent only to that task's
+JVM arguments in `doFirst`. Gradle daemon VM options are unchanged, and other
+JavaExec tasks in the dependency graph receive no inspection agent from this
+script. Cleanup restores only the private copy's previous options.
 
-Gradle support is intentionally limited: one exact JavaExec/application-run task
-(such as `:run` or `:app:run`), with native task options such as `--args` preserved.
-The configuration rejects test mode, Gradle script/daemon debugging, continuous
-execution, dry-run, and configuration-cache mode. The init script also rejects
-configuration cache enabled through Gradle properties and non-JavaExec or excluded
-requested tasks before launching a target application. Remote targets and WSL
-preparation are unsupported. Only Run and Debug are adapted, not Coverage or
-profiling executors. The bundled Gradle plugin is the only new plugin dependency.
+Selection does not imply execution compatibility. Non-JVM profiles, compound
+profiles, attach-only configurations, profiles without target VM options, and
+unsupported execution states fail with a clear error. Remote targets and WSL
+preparation remain unsupported. IDE execution providers which replace the copied
+profile/runner (for example build-tool delegation) are rejected; select a direct
+Java configuration or a compatible Gradle JavaExec configuration instead. Only
+Run and Debug are supported, not Coverage/profiling. Native pre-launch settings
+validation runs before binding the inspection receiver. The copy disables the
+optional native edit-before-run dialog, including on console rerun, so the IDE
+cannot automatically open/save an injected draft. Configure the underlying
+application beforehand; its stored edit-before-run preference remains unchanged.
+
+Gradle support remains limited to one exact JavaExec/application-run task (such
+as `:run` or `:app:run`), preserving native task options such as `--args`.
+Test mode, script/daemon debugging, continuous execution, dry-run, and
+configuration-cache mode are rejected. The init script also rejects configuration
+cache enabled through Gradle properties and non-JavaExec or excluded requested
+tasks before launching an application. The bundled Gradle dependency is unchanged.
 
 ## Recording lifecycle
 
@@ -216,10 +244,16 @@ and may inspect concurrently with distinct host/port bindings. No application-wi
 session registry or multi-session redesign is added. Supporting multiple sessions
 in one project needs explicit model/session selection and ownership work later.
 Trace-target changes affect future JVM launches; recording toggles do not
-re-instrument an already running agent. Changing the underlying type during
-preparation, or rerunning an old console after changing its type, fails with an
-instruction to launch again from the toolbar.
+re-instrument an already running agent. Edits to the selected original affect the
+next launch/rerun, while an already prepared execution owns its independent copy.
 
-Runtime/IDE integration, actual settings restoration, and debugger behavior remain
-subject to future functional validation. Build results alone do not establish
-the runtime scenarios above; this task permits only build validation.
+Runtime/IDE integration, actual settings restoration, and debugger behavior require
+functional validation. For this refactoring, source/API review covered native
+Application, JAR Application, and Gradle JavaExec paths; no Run Configuration
+implementation was executed. The execution environment was unavailable, so Maven
+and Gradle builds could not run. No IntelliJ SDK was downloaded.
+
+Pending IDE checks include selection/restoration and rename/deletion; source
+configuration immutability across Run/Debug/rerun; exact target JVM agent options;
+incompatible-profile errors; recording pause/resume; and cleanup after process
+failure/termination. No new test harness or session-management design is introduced.
