@@ -3,6 +3,7 @@ package dd.pp.interparaiment.view.listeners;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.regex.Pattern;
 
 import org.jetbrains.annotations.NotNull;
@@ -29,6 +30,7 @@ public class InstanceConstructionListener implements IListener<InstanceCreatedEv
     private final Project project;
     private final ExecutorService executor;
     private String previousCallerClass = "";
+    private volatile boolean disposed;
 
     public InstanceConstructionListener(final MessLogView logView, final Project project) {
         this.logView = logView;
@@ -43,6 +45,9 @@ public class InstanceConstructionListener implements IListener<InstanceCreatedEv
 
     @Override
     public void accept(final InstanceCreatedEvent data) {
+        if (disposed || project.isDisposed()) {
+            return;
+        }
         final Path path = data.getData();
         final boolean printNewCaller = !Objects.equals(this.previousCallerClass, path.caller);
 
@@ -50,14 +55,26 @@ public class InstanceConstructionListener implements IListener<InstanceCreatedEv
             this.previousCallerClass = path.caller;
         }
 
-        this.executor.submit(() -> {
-            final ConstructionLogContext context = resolveNewInstance(path, printNewCaller);
-            printInEDT(context);
-        });
+        try {
+            this.executor.submit(() -> {
+                if (!disposed && !project.isDisposed()) {
+                    final ConstructionLogContext context = resolveNewInstance(path, printNewCaller);
+                    printInEDT(context);
+                }
+            });
+        } catch (RejectedExecutionException closing) {
+            if (!disposed) {
+                throw closing;
+            }
+        }
     }
 
     private void printInEDT(final ConstructionLogContext context) {
-        ApplicationManager.getApplication().invokeLater(() -> logContext(context));
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (!disposed && !project.isDisposed()) {
+                logContext(context);
+            }
+        }, project.getDisposed());
     }
 
     private void logContext(final ConstructionLogContext context) {
@@ -113,8 +130,13 @@ public class InstanceConstructionListener implements IListener<InstanceCreatedEv
         return new ConstructionLogContext(label, message, linkToFile, callerName, printNewCaller);
     }
 
-    public void dispose() {
+    public void finish() {
         this.executor.shutdown();
+    }
+
+    public void dispose() {
+        disposed = true;
+        this.executor.shutdownNow();
     }
 }
 

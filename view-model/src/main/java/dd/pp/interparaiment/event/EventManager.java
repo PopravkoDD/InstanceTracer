@@ -1,37 +1,32 @@
 package dd.pp.interparaiment.event;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class EventManager {
-    private final Map<Class<?>, List<IListener<?>>> listenersMap;
+    private final Map<Class<?>, CopyOnWriteArrayList<IListener<?>>> listenersMap = new ConcurrentHashMap<>();
 
-    public EventManager() {
-        this.listenersMap = new TreeMap<>(new IdentityComparator<>());
+    public <TEventData> Subscription subscribe(Class<TEventData> event, IListener<TEventData> listener) {
+        CopyOnWriteArrayList<IListener<?>> listeners = listenersMap.computeIfAbsent(
+                event, ignored -> new CopyOnWriteArrayList<>());
+        listeners.add(listener);
+        return () -> listeners.remove(listener);
     }
 
-    public <TEventData> void subscribe(Class<TEventData> event, final IListener<TEventData> listener) {
-        this.getListeners(event).add(listener);
-    }
-
+    @SuppressWarnings("unchecked")
     public <TEventData> void notify(TEventData event) {
-        this.getListeners(event.getClass()).forEach(listener -> {
-            ((IListener<TEventData>) listener).accept(event);
-        });
-    }
-
-    private <TEventData> List<IListener<?>> getListeners(Class<TEventData> eventType) {
-        return this.listenersMap.computeIfAbsent(eventType, listeners -> new ArrayList<>());
-    }
-
-    private static class IdentityComparator<TItem> implements Comparator<TItem> {
-        @Override
-        public int compare(TItem o1, TItem o2) {
-            return Integer.compare(System.identityHashCode(o1), System.identityHashCode(o2));
+        CopyOnWriteArrayList<IListener<?>> listeners = listenersMap.get(event.getClass());
+        if (listeners != null) {
+            for (IListener<?> listener : listeners) {
+                ((IListener<TEventData>) listener).accept(event);
+            }
         }
+    }
 
+    @FunctionalInterface
+    public interface Subscription extends AutoCloseable {
+        @Override
+        void close();
     }
 }

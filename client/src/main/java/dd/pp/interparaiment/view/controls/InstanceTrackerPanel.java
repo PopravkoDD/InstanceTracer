@@ -1,15 +1,11 @@
 package dd.pp.interparaiment.view.controls;
 
 import java.awt.BorderLayout;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JTree;
-import javax.swing.SwingUtilities;
-import javax.swing.tree.TreePath;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -17,6 +13,8 @@ import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.Disposable;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.ui.JBSplitter;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBPanel;
@@ -25,29 +23,40 @@ import com.intellij.ui.components.JBScrollPane;
 import dd.pp.interparaiment.InspectorViewModel;
 import dd.pp.interparaiment.event.EventManager;
 import dd.pp.interparaiment.event.requests.InstanceCreatedEvent;
+import dd.pp.interparaiment.event.requests.InspectionClosedEvent;
 import dd.pp.interparaiment.event.requests.ShowMessageInConsoleRequest;
 import dd.pp.interparaiment.view.listeners.InstanceConstructionListener;
 import dd.pp.interparaiment.view.actions.ConfigureTrackerAction;
 import dd.pp.interparaiment.view.actions.DumpTheMessAction;
-import dd.pp.interparaiment.view.actions.TrackerStartAction;
-import dd.pp.interparaiment.view.actions.TrackerStopAction;
+import dd.pp.interparaiment.view.actions.StartRecordingTrackerAction;
+import dd.pp.interparaiment.view.actions.StopRecordingTrackerAction;
 import dd.pp.interparaiment.view.actions.MessActionsContext;
 import dd.pp.interparaiment.view.listeners.MessTreeMouseListener;
 import dd.pp.interparaiment.view.model.construction.ConstructionTreeModel;
 import dd.pp.interparaiment.view.model.construction.ConstructionTreeNode;
 import dd.pp.interparaiment.view.renderers.MessTreeRenderer;
-import dd.pp.interparaiment.view.service.TracingService;
+import dd.pp.interparaiment.view.execution.MessInspectionConfiguration;
 
-public class InstanceTrackerPanel extends JBPanel {
+public class InstanceTrackerPanel extends JBPanel implements Disposable {
 
     private UIUpdater updater;
     private final EventManager eventManager;
     private final InspectorViewModel viewModel;
 
-    public InstanceTrackerPanel(final Project project) {
+    private final Project project;
+    private final MessInspectionConfiguration configuration;
+    private InstanceConstructionListener constructionListener;
+    private EventManager.Subscription consoleSubscription;
+    private EventManager.Subscription constructionSubscription;
+    private EventManager.Subscription closedSubscription;
+    private MessLogView logView;
+
+    public InstanceTrackerPanel(Project project, InspectorViewModel viewModel, MessInspectionConfiguration configuration) {
         super(new BorderLayout());
 
-        this.viewModel = project.getService(TracingService.class).getViewModel();
+        this.project = project;
+        this.configuration = configuration;
+        this.viewModel = viewModel;
         this.eventManager = this.viewModel.getEventManager();
 
         JBLabel title = new JBLabel("Instance tracker");
@@ -60,10 +69,11 @@ public class InstanceTrackerPanel extends JBPanel {
     }
 
     private JComponent initView(final Project project) {
-        final MessLogView logView = new MessLogView(project);
-
-        this.eventManager.subscribe(ShowMessageInConsoleRequest.class, data -> logView.logInfo(data.getData()));
-        this.eventManager.subscribe(InstanceCreatedEvent.class, new InstanceConstructionListener(logView, project));
+        this.logView = new MessLogView(project);
+        this.constructionListener = new InstanceConstructionListener(logView, project);
+        this.consoleSubscription = this.eventManager.subscribe(ShowMessageInConsoleRequest.class,
+                data -> logView.logInfo(data.getData()));
+        this.constructionSubscription = this.eventManager.subscribe(InstanceCreatedEvent.class, constructionListener);
 
         //Tree view
         final JPanel treePanel = new JPanel(new BorderLayout());
@@ -72,6 +82,11 @@ public class InstanceTrackerPanel extends JBPanel {
         final JTree tree = createMessTree(treeModel, project);
 
         this.updater = new UIUpdater(tree, treeModel::syncModels);
+        this.closedSubscription = this.eventManager.subscribe(InspectionClosedEvent.class, event ->
+                ApplicationManager.getApplication().invokeLater(this::finishSessionUi, project.getDisposed()));
+        if (!viewModel.isInspectionActive()) {
+            finishSessionUi();
+        }
 
         final JComponent miniToolbar = createMiniToolbar();
         treePanel.add(miniToolbar, BorderLayout.NORTH);
@@ -100,9 +115,9 @@ public class InstanceTrackerPanel extends JBPanel {
         final MessActionsContext state = new MessActionsContext(this.updater);
 
         final DumpTheMessAction dumpMessAction = new DumpTheMessAction(state, this.eventManager);
-        final TrackerStartAction startAction = new TrackerStartAction(state, this.eventManager);
-        final TrackerStopAction trackerStopAction = new TrackerStopAction(state, this.eventManager);
-        final ConfigureTrackerAction configureTrackerAction = new ConfigureTrackerAction(state);
+        final StartRecordingTrackerAction startAction = new StartRecordingTrackerAction(state, this.viewModel);
+        final StopRecordingTrackerAction trackerStopAction = new StopRecordingTrackerAction(state, this.viewModel);
+        final ConfigureTrackerAction configureTrackerAction = new ConfigureTrackerAction(project, configuration);
 
         group.add(startAction);
         group.add(dumpMessAction);
@@ -115,7 +130,24 @@ public class InstanceTrackerPanel extends JBPanel {
         final ActionToolbar toolbar = ActionManager.getInstance()
                 .createActionToolbar("TrackerToolbar", group, true);
 
-        toolbar.setTargetComponent(null);
+        toolbar.setTargetComponent(this);
         return toolbar.getComponent();
+    }
+
+    private void finishSessionUi() {
+        consoleSubscription.close();
+        constructionSubscription.close();
+        closedSubscription.close();
+        constructionListener.finish();
+        updater.update();
+    }
+
+    @Override
+    public void dispose() {
+        consoleSubscription.close();
+        constructionSubscription.close();
+        closedSubscription.close();
+        constructionListener.dispose();
+        logView.dispose();
     }
 }

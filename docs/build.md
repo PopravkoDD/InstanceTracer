@@ -31,3 +31,23 @@ Do not launch IntelliJ or functionally test the client unless explicitly request
 Record each command and outcome. Distinguish compilation failures, dependency/environment failures, test failures, checks not run, and runtime behavior not verified. Do not silently disable validation to obtain a green result.
 
 Attempt in-scope repairs. Push the task branch even when the build remains failed or blocked, with an explicit report. If push itself fails, preserve the commit and report the actual publication status.
+
+## Verified build layout
+
+The root POM aggregates `hooks`, `agent`, `common`, and `view-model`; Maven orders
+reactor dependencies. There is no Maven wrapper. From the repository root use:
+
+    mvn -B clean install
+
+The client uses the committed Gradle 8.4 wrapper and IntelliJ Gradle plugin
+1.16.1, targeting IntelliJ Community 2023.3.6 with the Java plugin. After Maven
+installation, inspect the packaging graph, then package from `client`:
+
+    bash gradlew buildPlugin --dry-run
+    bash gradlew buildPlugin
+
+Use `bash` if the wrapper is not executable. The Gradle plugin may resolve its
+IntelliJ dependency while configuring tasks, including querying `runIde.ideDir`;
+that query does not launch `runIde`. Do not download a separate SDK as a build
+workaround. Preserve the environment's proxy/CA configuration when dependency
+resolution requires it.
