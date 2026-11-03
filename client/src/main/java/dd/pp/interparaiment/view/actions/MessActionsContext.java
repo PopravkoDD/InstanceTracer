@@ -1,24 +1,30 @@
 package dd.pp.interparaiment.view.actions;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import dd.pp.interparaiment.view.controls.UIUpdater;
 
-public class MessActionsContext {
-    private boolean isRunning = false;
+public final class MessActionsContext {
+    private final AtomicBoolean busy = new AtomicBoolean();
     private final UIUpdater updater;
 
     public MessActionsContext(UIUpdater updater) {
         this.updater = updater;
     }
 
-    public boolean isRunning() {
-        return isRunning;
+    public boolean isBusy() {
+        return busy.get();
     }
 
-    public void setRunning(final boolean isRunning) {
-        this.isRunning = isRunning;
+    public boolean beginOperation() {
+        return busy.compareAndSet(false, true);
+    }
+
+    public void finishOperation() {
+        busy.set(false);
     }
 
     public UIUpdater getUpdater() {
-        return this.updater;
+        return updater;
     }
 }

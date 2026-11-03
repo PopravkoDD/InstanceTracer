@@ -15,8 +15,9 @@ import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.Disposable;
 
-public class MessLogView extends JPanel {
+public class MessLogView extends JPanel implements Disposable {
     private final ConsoleView consoleView;
 
     public MessLogView(final Project project) {
@@ -155,6 +156,11 @@ public class MessLogView extends JPanel {
 
         this.consoleView.printHyperlink(message, hyperlink);
         this.consoleView.print(System.lineSeparator(), ConsoleViewContentType.NORMAL_OUTPUT);
+    }
+
+    @Override
+    public void dispose() {
+        consoleView.dispose();
     }
 
     //    ConsoleViewContentType.LOG_DEBUG_OUTPUT      light green

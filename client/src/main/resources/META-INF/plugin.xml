@@ -16,6 +16,9 @@
     <!-- Extension points defined by the plugin.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
+        <configurationType implementation="dd.pp.interparaiment.view.execution.MessInspectionConfigurationType"/>
+        <programRunner implementation="dd.pp.interparaiment.view.execution.MessInspectionProgramRunner"/>
+        <java.programPatcher implementation="dd.pp.interparaiment.view.execution.InspectionJavaProgramPatcher"/>
         <toolWindow
                 id="MyWindow"
                 anchor="right"
@@ -23,6 +26,11 @@
                 canCloseContents="false"
                 secondary="false"/>
     </extensions>
+
+    <projectListeners>
+        <listener class="dd.pp.interparaiment.view.execution.InspectionRunManagerListener"
+                  topic="com.intellij.execution.RunManagerListener"/>
+    </projectListeners>
 
     <actions>
 <!--        <action id="plugin.Test" class="plugin.Test" text="Test" description="TestNice">-->
