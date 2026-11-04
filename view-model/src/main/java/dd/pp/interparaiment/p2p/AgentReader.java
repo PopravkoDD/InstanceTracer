@@ -70,7 +70,7 @@ public class AgentReader implements AutoCloseable {
         }
         byte[] payload = new byte[length];
         in.readFully(payload);
-        synchronized (admissionLock) {
+        synchronized (admissionLock) { //govno
             if (!worker.isReadingMuted() && !closed && generation == recordingGeneration) {
                 dataResolver.emmit(payload);
             }

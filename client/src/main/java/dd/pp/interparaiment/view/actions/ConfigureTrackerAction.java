@@ -55,12 +55,9 @@ public final class ConfigureTrackerAction extends AnAction {
         }
         try {
             InspectorConfiguration before = project.getService(TracingService.class).resolveConfiguration(configuration);
-            // This editor model never opens a socket. Running sessions retain their launch snapshot.
-            try (InspectorViewModel editorModel = new InspectorViewModel(before)) {
-                editorModel.updateOptions(new InspectorConfiguration(dialog.getTraceTargets(), before.host(), before.port(),
-                        before.agentPath(), before.bridgePath(), before.recordOnStart()));
-                configuration.setTraceTargets(editorModel.getConfiguration().traceTargets());
-            }
+            final InspectorConfiguration newConfiguration = new InspectorConfiguration(dialog.getTraceTargets(), before.host(), before.port(),
+                    before.agentPath(), before.bridgePath(), before.recordOnStart());
+            configuration.setTraceTargets(newConfiguration.traceTargets());
         } catch (IOException | IllegalArgumentException | IllegalStateException failure) {
             Messages.showErrorDialog(project, failure.getMessage(), "Cannot Configure InstanceTracer");
         }
